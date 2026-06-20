@@ -57,6 +57,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
 #err { position: absolute; inset: 0; z-index: 10; display: flex;
   align-items: center; justify-content: center; padding: 40px; text-align: center;
   background: var(--bg); }
+/* `hidden` must win over the display above, else this opaque panel covers the
+   whole viewer even when empty (a CSS display value overrides the [hidden] attr) */
+#err[hidden] { display: none; }
 #err .box { max-width: 560px; }
 #err h2 { color: var(--crash); }
 #err code { background: #1b2230; padding: 2px 6px; border-radius: 5px; }

@@ -1,0 +1,1292 @@
+{
+  "scene_id": "sf-city-v1",
+  "description": "3D San Francisco (downtown OSM graph) with 250 Ackermann cars. Generated from the SmoothRide road network. Drive via step(action), 4 actuators per car.",
+  "source": "generated:smoothride.worldsim.build_sf_scene",
+  "format": "mjcf",
+  "engine": "newton",
+  "n_cars": 250,
+  "control": {
+    "tool": "step",
+    "action_dim": 1000,
+    "per_car": 4,
+    "per_car_layout": "[drive_rl, drive_rr, steer_l, steer_r]",
+    "car_order": "spawn order; car i actuators at offset 4*i",
+    "wheel_radius_m": 0.33,
+    "wheelbase_m": 2.7
+  },
+  "cars": [
+    {
+      "body": "c0_chassis",
+      "pos_sensor": "c0_pos"
+    },
+    {
+      "body": "c1_chassis",
+      "pos_sensor": "c1_pos"
+    },
+    {
+      "body": "c2_chassis",
+      "pos_sensor": "c2_pos"
+    },
+    {
+      "body": "c3_chassis",
+      "pos_sensor": "c3_pos"
+    },
+    {
+      "body": "c4_chassis",
+      "pos_sensor": "c4_pos"
+    },
+    {
+      "body": "c5_chassis",
+      "pos_sensor": "c5_pos"
+    },
+    {
+      "body": "c6_chassis",
+      "pos_sensor": "c6_pos"
+    },
+    {
+      "body": "c7_chassis",
+      "pos_sensor": "c7_pos"
+    },
+    {
+      "body": "c8_chassis",
+      "pos_sensor": "c8_pos"
+    },
+    {
+      "body": "c9_chassis",
+      "pos_sensor": "c9_pos"
+    },
+    {
+      "body": "c10_chassis",
+      "pos_sensor": "c10_pos"
+    },
+    {
+      "body": "c11_chassis",
+      "pos_sensor": "c11_pos"
+    },
+    {
+      "body": "c12_chassis",
+      "pos_sensor": "c12_pos"
+    },
+    {
+      "body": "c13_chassis",
+      "pos_sensor": "c13_pos"
+    },
+    {
+      "body": "c14_chassis",
+      "pos_sensor": "c14_pos"
+    },
+    {
+      "body": "c15_chassis",
+      "pos_sensor": "c15_pos"
+    },
+    {
+      "body": "c16_chassis",
+      "pos_sensor": "c16_pos"
+    },
+    {
+      "body": "c17_chassis",
+      "pos_sensor": "c17_pos"
+    },
+    {
+      "body": "c18_chassis",
+      "pos_sensor": "c18_pos"
+    },
+    {
+      "body": "c19_chassis",
+      "pos_sensor": "c19_pos"
+    },
+    {
+      "body": "c20_chassis",
+      "pos_sensor": "c20_pos"
+    },
+    {
+      "body": "c21_chassis",
+      "pos_sensor": "c21_pos"
+    },
+    {
+      "body": "c22_chassis",
+      "pos_sensor": "c22_pos"
+    },
+    {
+      "body": "c23_chassis",
+      "pos_sensor": "c23_pos"
+    },
+    {
+      "body": "c24_chassis",
+      "pos_sensor": "c24_pos"
+    },
+    {
+      "body": "c25_chassis",
+      "pos_sensor": "c25_pos"
+    },
+    {
+      "body": "c26_chassis",
+      "pos_sensor": "c26_pos"
+    },
+    {
+      "body": "c27_chassis",
+      "pos_sensor": "c27_pos"
+    },
+    {
+      "body": "c28_chassis",
+      "pos_sensor": "c28_pos"
+    },
+    {
+      "body": "c29_chassis",
+      "pos_sensor": "c29_pos"
+    },
+    {
+      "body": "c30_chassis",
+      "pos_sensor": "c30_pos"
+    },
+    {
+      "body": "c31_chassis",
+      "pos_sensor": "c31_pos"
+    },
+    {
+      "body": "c32_chassis",
+      "pos_sensor": "c32_pos"
+    },
+    {
+      "body": "c33_chassis",
+      "pos_sensor": "c33_pos"
+    },
+    {
+      "body": "c34_chassis",
+      "pos_sensor": "c34_pos"
+    },
+    {
+      "body": "c35_chassis",
+      "pos_sensor": "c35_pos"
+    },
+    {
+      "body": "c36_chassis",
+      "pos_sensor": "c36_pos"
+    },
+    {
+      "body": "c37_chassis",
+      "pos_sensor": "c37_pos"
+    },
+    {
+      "body": "c38_chassis",
+      "pos_sensor": "c38_pos"
+    },
+    {
+      "body": "c39_chassis",
+      "pos_sensor": "c39_pos"
+    },
+    {
+      "body": "c40_chassis",
+      "pos_sensor": "c40_pos"
+    },
+    {
+      "body": "c41_chassis",
+      "pos_sensor": "c41_pos"
+    },
+    {
+      "body": "c42_chassis",
+      "pos_sensor": "c42_pos"
+    },
+    {
+      "body": "c43_chassis",
+      "pos_sensor": "c43_pos"
+    },
+    {
+      "body": "c44_chassis",
+      "pos_sensor": "c44_pos"
+    },
+    {
+      "body": "c45_chassis",
+      "pos_sensor": "c45_pos"
+    },
+    {
+      "body": "c46_chassis",
+      "pos_sensor": "c46_pos"
+    },
+    {
+      "body": "c47_chassis",
+      "pos_sensor": "c47_pos"
+    },
+    {
+      "body": "c48_chassis",
+      "pos_sensor": "c48_pos"
+    },
+    {
+      "body": "c49_chassis",
+      "pos_sensor": "c49_pos"
+    },
+    {
+      "body": "c50_chassis",
+      "pos_sensor": "c50_pos"
+    },
+    {
+      "body": "c51_chassis",
+      "pos_sensor": "c51_pos"
+    },
+    {
+      "body": "c52_chassis",
+      "pos_sensor": "c52_pos"
+    },
+    {
+      "body": "c53_chassis",
+      "pos_sensor": "c53_pos"
+    },
+    {
+      "body": "c54_chassis",
+      "pos_sensor": "c54_pos"
+    },
+    {
+      "body": "c55_chassis",
+      "pos_sensor": "c55_pos"
+    },
+    {
+      "body": "c56_chassis",
+      "pos_sensor": "c56_pos"
+    },
+    {
+      "body": "c57_chassis",
+      "pos_sensor": "c57_pos"
+    },
+    {
+      "body": "c58_chassis",
+      "pos_sensor": "c58_pos"
+    },
+    {
+      "body": "c59_chassis",
+      "pos_sensor": "c59_pos"
+    },
+    {
+      "body": "c60_chassis",
+      "pos_sensor": "c60_pos"
+    },
+    {
+      "body": "c61_chassis",
+      "pos_sensor": "c61_pos"
+    },
+    {
+      "body": "c62_chassis",
+      "pos_sensor": "c62_pos"
+    },
+    {
+      "body": "c63_chassis",
+      "pos_sensor": "c63_pos"
+    },
+    {
+      "body": "c64_chassis",
+      "pos_sensor": "c64_pos"
+    },
+    {
+      "body": "c65_chassis",
+      "pos_sensor": "c65_pos"
+    },
+    {
+      "body": "c66_chassis",
+      "pos_sensor": "c66_pos"
+    },
+    {
+      "body": "c67_chassis",
+      "pos_sensor": "c67_pos"
+    },
+    {
+      "body": "c68_chassis",
+      "pos_sensor": "c68_pos"
+    },
+    {
+      "body": "c69_chassis",
+      "pos_sensor": "c69_pos"
+    },
+    {
+      "body": "c70_chassis",
+      "pos_sensor": "c70_pos"
+    },
+    {
+      "body": "c71_chassis",
+      "pos_sensor": "c71_pos"
+    },
+    {
+      "body": "c72_chassis",
+      "pos_sensor": "c72_pos"
+    },
+    {
+      "body": "c73_chassis",
+      "pos_sensor": "c73_pos"
+    },
+    {
+      "body": "c74_chassis",
+      "pos_sensor": "c74_pos"
+    },
+    {
+      "body": "c75_chassis",
+      "pos_sensor": "c75_pos"
+    },
+    {
+      "body": "c76_chassis",
+      "pos_sensor": "c76_pos"
+    },
+    {
+      "body": "c77_chassis",
+      "pos_sensor": "c77_pos"
+    },
+    {
+      "body": "c78_chassis",
+      "pos_sensor": "c78_pos"
+    },
+    {
+      "body": "c79_chassis",
+      "pos_sensor": "c79_pos"
+    },
+    {
+      "body": "c80_chassis",
+      "pos_sensor": "c80_pos"
+    },
+    {
+      "body": "c81_chassis",
+      "pos_sensor": "c81_pos"
+    },
+    {
+      "body": "c82_chassis",
+      "pos_sensor": "c82_pos"
+    },
+    {
+      "body": "c83_chassis",
+      "pos_sensor": "c83_pos"
+    },
+    {
+      "body": "c84_chassis",
+      "pos_sensor": "c84_pos"
+    },
+    {
+      "body": "c85_chassis",
+      "pos_sensor": "c85_pos"
+    },
+    {
+      "body": "c86_chassis",
+      "pos_sensor": "c86_pos"
+    },
+    {
+      "body": "c87_chassis",
+      "pos_sensor": "c87_pos"
+    },
+    {
+      "body": "c88_chassis",
+      "pos_sensor": "c88_pos"
+    },
+    {
+      "body": "c89_chassis",
+      "pos_sensor": "c89_pos"
+    },
+    {
+      "body": "c90_chassis",
+      "pos_sensor": "c90_pos"
+    },
+    {
+      "body": "c91_chassis",
+      "pos_sensor": "c91_pos"
+    },
+    {
+      "body": "c92_chassis",
+      "pos_sensor": "c92_pos"
+    },
+    {
+      "body": "c93_chassis",
+      "pos_sensor": "c93_pos"
+    },
+    {
+      "body": "c94_chassis",
+      "pos_sensor": "c94_pos"
+    },
+    {
+      "body": "c95_chassis",
+      "pos_sensor": "c95_pos"
+    },
+    {
+      "body": "c96_chassis",
+      "pos_sensor": "c96_pos"
+    },
+    {
+      "body": "c97_chassis",
+      "pos_sensor": "c97_pos"
+    },
+    {
+      "body": "c98_chassis",
+      "pos_sensor": "c98_pos"
+    },
+    {
+      "body": "c99_chassis",
+      "pos_sensor": "c99_pos"
+    },
+    {
+      "body": "c100_chassis",
+      "pos_sensor": "c100_pos"
+    },
+    {
+      "body": "c101_chassis",
+      "pos_sensor": "c101_pos"
+    },
+    {
+      "body": "c102_chassis",
+      "pos_sensor": "c102_pos"
+    },
+    {
+      "body": "c103_chassis",
+      "pos_sensor": "c103_pos"
+    },
+    {
+      "body": "c104_chassis",
+      "pos_sensor": "c104_pos"
+    },
+    {
+      "body": "c105_chassis",
+      "pos_sensor": "c105_pos"
+    },
+    {
+      "body": "c106_chassis",
+      "pos_sensor": "c106_pos"
+    },
+    {
+      "body": "c107_chassis",
+      "pos_sensor": "c107_pos"
+    },
+    {
+      "body": "c108_chassis",
+      "pos_sensor": "c108_pos"
+    },
+    {
+      "body": "c109_chassis",
+      "pos_sensor": "c109_pos"
+    },
+    {
+      "body": "c110_chassis",
+      "pos_sensor": "c110_pos"
+    },
+    {
+      "body": "c111_chassis",
+      "pos_sensor": "c111_pos"
+    },
+    {
+      "body": "c112_chassis",
+      "pos_sensor": "c112_pos"
+    },
+    {
+      "body": "c113_chassis",
+      "pos_sensor": "c113_pos"
+    },
+    {
+      "body": "c114_chassis",
+      "pos_sensor": "c114_pos"
+    },
+    {
+      "body": "c115_chassis",
+      "pos_sensor": "c115_pos"
+    },
+    {
+      "body": "c116_chassis",
+      "pos_sensor": "c116_pos"
+    },
+    {
+      "body": "c117_chassis",
+      "pos_sensor": "c117_pos"
+    },
+    {
+      "body": "c118_chassis",
+      "pos_sensor": "c118_pos"
+    },
+    {
+      "body": "c119_chassis",
+      "pos_sensor": "c119_pos"
+    },
+    {
+      "body": "c120_chassis",
+      "pos_sensor": "c120_pos"
+    },
+    {
+      "body": "c121_chassis",
+      "pos_sensor": "c121_pos"
+    },
+    {
+      "body": "c122_chassis",
+      "pos_sensor": "c122_pos"
+    },
+    {
+      "body": "c123_chassis",
+      "pos_sensor": "c123_pos"
+    },
+    {
+      "body": "c124_chassis",
+      "pos_sensor": "c124_pos"
+    },
+    {
+      "body": "c125_chassis",
+      "pos_sensor": "c125_pos"
+    },
+    {
+      "body": "c126_chassis",
+      "pos_sensor": "c126_pos"
+    },
+    {
+      "body": "c127_chassis",
+      "pos_sensor": "c127_pos"
+    },
+    {
+      "body": "c128_chassis",
+      "pos_sensor": "c128_pos"
+    },
+    {
+      "body": "c129_chassis",
+      "pos_sensor": "c129_pos"
+    },
+    {
+      "body": "c130_chassis",
+      "pos_sensor": "c130_pos"
+    },
+    {
+      "body": "c131_chassis",
+      "pos_sensor": "c131_pos"
+    },
+    {
+      "body": "c132_chassis",
+      "pos_sensor": "c132_pos"
+    },
+    {
+      "body": "c133_chassis",
+      "pos_sensor": "c133_pos"
+    },
+    {
+      "body": "c134_chassis",
+      "pos_sensor": "c134_pos"
+    },
+    {
+      "body": "c135_chassis",
+      "pos_sensor": "c135_pos"
+    },
+    {
+      "body": "c136_chassis",
+      "pos_sensor": "c136_pos"
+    },
+    {
+      "body": "c137_chassis",
+      "pos_sensor": "c137_pos"
+    },
+    {
+      "body": "c138_chassis",
+      "pos_sensor": "c138_pos"
+    },
+    {
+      "body": "c139_chassis",
+      "pos_sensor": "c139_pos"
+    },
+    {
+      "body": "c140_chassis",
+      "pos_sensor": "c140_pos"
+    },
+    {
+      "body": "c141_chassis",
+      "pos_sensor": "c141_pos"
+    },
+    {
+      "body": "c142_chassis",
+      "pos_sensor": "c142_pos"
+    },
+    {
+      "body": "c143_chassis",
+      "pos_sensor": "c143_pos"
+    },
+    {
+      "body": "c144_chassis",
+      "pos_sensor": "c144_pos"
+    },
+    {
+      "body": "c145_chassis",
+      "pos_sensor": "c145_pos"
+    },
+    {
+      "body": "c146_chassis",
+      "pos_sensor": "c146_pos"
+    },
+    {
+      "body": "c147_chassis",
+      "pos_sensor": "c147_pos"
+    },
+    {
+      "body": "c148_chassis",
+      "pos_sensor": "c148_pos"
+    },
+    {
+      "body": "c149_chassis",
+      "pos_sensor": "c149_pos"
+    },
+    {
+      "body": "c150_chassis",
+      "pos_sensor": "c150_pos"
+    },
+    {
+      "body": "c151_chassis",
+      "pos_sensor": "c151_pos"
+    },
+    {
+      "body": "c152_chassis",
+      "pos_sensor": "c152_pos"
+    },
+    {
+      "body": "c153_chassis",
+      "pos_sensor": "c153_pos"
+    },
+    {
+      "body": "c154_chassis",
+      "pos_sensor": "c154_pos"
+    },
+    {
+      "body": "c155_chassis",
+      "pos_sensor": "c155_pos"
+    },
+    {
+      "body": "c156_chassis",
+      "pos_sensor": "c156_pos"
+    },
+    {
+      "body": "c157_chassis",
+      "pos_sensor": "c157_pos"
+    },
+    {
+      "body": "c158_chassis",
+      "pos_sensor": "c158_pos"
+    },
+    {
+      "body": "c159_chassis",
+      "pos_sensor": "c159_pos"
+    },
+    {
+      "body": "c160_chassis",
+      "pos_sensor": "c160_pos"
+    },
+    {
+      "body": "c161_chassis",
+      "pos_sensor": "c161_pos"
+    },
+    {
+      "body": "c162_chassis",
+      "pos_sensor": "c162_pos"
+    },
+    {
+      "body": "c163_chassis",
+      "pos_sensor": "c163_pos"
+    },
+    {
+      "body": "c164_chassis",
+      "pos_sensor": "c164_pos"
+    },
+    {
+      "body": "c165_chassis",
+      "pos_sensor": "c165_pos"
+    },
+    {
+      "body": "c166_chassis",
+      "pos_sensor": "c166_pos"
+    },
+    {
+      "body": "c167_chassis",
+      "pos_sensor": "c167_pos"
+    },
+    {
+      "body": "c168_chassis",
+      "pos_sensor": "c168_pos"
+    },
+    {
+      "body": "c169_chassis",
+      "pos_sensor": "c169_pos"
+    },
+    {
+      "body": "c170_chassis",
+      "pos_sensor": "c170_pos"
+    },
+    {
+      "body": "c171_chassis",
+      "pos_sensor": "c171_pos"
+    },
+    {
+      "body": "c172_chassis",
+      "pos_sensor": "c172_pos"
+    },
+    {
+      "body": "c173_chassis",
+      "pos_sensor": "c173_pos"
+    },
+    {
+      "body": "c174_chassis",
+      "pos_sensor": "c174_pos"
+    },
+    {
+      "body": "c175_chassis",
+      "pos_sensor": "c175_pos"
+    },
+    {
+      "body": "c176_chassis",
+      "pos_sensor": "c176_pos"
+    },
+    {
+      "body": "c177_chassis",
+      "pos_sensor": "c177_pos"
+    },
+    {
+      "body": "c178_chassis",
+      "pos_sensor": "c178_pos"
+    },
+    {
+      "body": "c179_chassis",
+      "pos_sensor": "c179_pos"
+    },
+    {
+      "body": "c180_chassis",
+      "pos_sensor": "c180_pos"
+    },
+    {
+      "body": "c181_chassis",
+      "pos_sensor": "c181_pos"
+    },
+    {
+      "body": "c182_chassis",
+      "pos_sensor": "c182_pos"
+    },
+    {
+      "body": "c183_chassis",
+      "pos_sensor": "c183_pos"
+    },
+    {
+      "body": "c184_chassis",
+      "pos_sensor": "c184_pos"
+    },
+    {
+      "body": "c185_chassis",
+      "pos_sensor": "c185_pos"
+    },
+    {
+      "body": "c186_chassis",
+      "pos_sensor": "c186_pos"
+    },
+    {
+      "body": "c187_chassis",
+      "pos_sensor": "c187_pos"
+    },
+    {
+      "body": "c188_chassis",
+      "pos_sensor": "c188_pos"
+    },
+    {
+      "body": "c189_chassis",
+      "pos_sensor": "c189_pos"
+    },
+    {
+      "body": "c190_chassis",
+      "pos_sensor": "c190_pos"
+    },
+    {
+      "body": "c191_chassis",
+      "pos_sensor": "c191_pos"
+    },
+    {
+      "body": "c192_chassis",
+      "pos_sensor": "c192_pos"
+    },
+    {
+      "body": "c193_chassis",
+      "pos_sensor": "c193_pos"
+    },
+    {
+      "body": "c194_chassis",
+      "pos_sensor": "c194_pos"
+    },
+    {
+      "body": "c195_chassis",
+      "pos_sensor": "c195_pos"
+    },
+    {
+      "body": "c196_chassis",
+      "pos_sensor": "c196_pos"
+    },
+    {
+      "body": "c197_chassis",
+      "pos_sensor": "c197_pos"
+    },
+    {
+      "body": "c198_chassis",
+      "pos_sensor": "c198_pos"
+    },
+    {
+      "body": "c199_chassis",
+      "pos_sensor": "c199_pos"
+    },
+    {
+      "body": "c200_chassis",
+      "pos_sensor": "c200_pos"
+    },
+    {
+      "body": "c201_chassis",
+      "pos_sensor": "c201_pos"
+    },
+    {
+      "body": "c202_chassis",
+      "pos_sensor": "c202_pos"
+    },
+    {
+      "body": "c203_chassis",
+      "pos_sensor": "c203_pos"
+    },
+    {
+      "body": "c204_chassis",
+      "pos_sensor": "c204_pos"
+    },
+    {
+      "body": "c205_chassis",
+      "pos_sensor": "c205_pos"
+    },
+    {
+      "body": "c206_chassis",
+      "pos_sensor": "c206_pos"
+    },
+    {
+      "body": "c207_chassis",
+      "pos_sensor": "c207_pos"
+    },
+    {
+      "body": "c208_chassis",
+      "pos_sensor": "c208_pos"
+    },
+    {
+      "body": "c209_chassis",
+      "pos_sensor": "c209_pos"
+    },
+    {
+      "body": "c210_chassis",
+      "pos_sensor": "c210_pos"
+    },
+    {
+      "body": "c211_chassis",
+      "pos_sensor": "c211_pos"
+    },
+    {
+      "body": "c212_chassis",
+      "pos_sensor": "c212_pos"
+    },
+    {
+      "body": "c213_chassis",
+      "pos_sensor": "c213_pos"
+    },
+    {
+      "body": "c214_chassis",
+      "pos_sensor": "c214_pos"
+    },
+    {
+      "body": "c215_chassis",
+      "pos_sensor": "c215_pos"
+    },
+    {
+      "body": "c216_chassis",
+      "pos_sensor": "c216_pos"
+    },
+    {
+      "body": "c217_chassis",
+      "pos_sensor": "c217_pos"
+    },
+    {
+      "body": "c218_chassis",
+      "pos_sensor": "c218_pos"
+    },
+    {
+      "body": "c219_chassis",
+      "pos_sensor": "c219_pos"
+    },
+    {
+      "body": "c220_chassis",
+      "pos_sensor": "c220_pos"
+    },
+    {
+      "body": "c221_chassis",
+      "pos_sensor": "c221_pos"
+    },
+    {
+      "body": "c222_chassis",
+      "pos_sensor": "c222_pos"
+    },
+    {
+      "body": "c223_chassis",
+      "pos_sensor": "c223_pos"
+    },
+    {
+      "body": "c224_chassis",
+      "pos_sensor": "c224_pos"
+    },
+    {
+      "body": "c225_chassis",
+      "pos_sensor": "c225_pos"
+    },
+    {
+      "body": "c226_chassis",
+      "pos_sensor": "c226_pos"
+    },
+    {
+      "body": "c227_chassis",
+      "pos_sensor": "c227_pos"
+    },
+    {
+      "body": "c228_chassis",
+      "pos_sensor": "c228_pos"
+    },
+    {
+      "body": "c229_chassis",
+      "pos_sensor": "c229_pos"
+    },
+    {
+      "body": "c230_chassis",
+      "pos_sensor": "c230_pos"
+    },
+    {
+      "body": "c231_chassis",
+      "pos_sensor": "c231_pos"
+    },
+    {
+      "body": "c232_chassis",
+      "pos_sensor": "c232_pos"
+    },
+    {
+      "body": "c233_chassis",
+      "pos_sensor": "c233_pos"
+    },
+    {
+      "body": "c234_chassis",
+      "pos_sensor": "c234_pos"
+    },
+    {
+      "body": "c235_chassis",
+      "pos_sensor": "c235_pos"
+    },
+    {
+      "body": "c236_chassis",
+      "pos_sensor": "c236_pos"
+    },
+    {
+      "body": "c237_chassis",
+      "pos_sensor": "c237_pos"
+    },
+    {
+      "body": "c238_chassis",
+      "pos_sensor": "c238_pos"
+    },
+    {
+      "body": "c239_chassis",
+      "pos_sensor": "c239_pos"
+    },
+    {
+      "body": "c240_chassis",
+      "pos_sensor": "c240_pos"
+    },
+    {
+      "body": "c241_chassis",
+      "pos_sensor": "c241_pos"
+    },
+    {
+      "body": "c242_chassis",
+      "pos_sensor": "c242_pos"
+    },
+    {
+      "body": "c243_chassis",
+      "pos_sensor": "c243_pos"
+    },
+    {
+      "body": "c244_chassis",
+      "pos_sensor": "c244_pos"
+    },
+    {
+      "body": "c245_chassis",
+      "pos_sensor": "c245_pos"
+    },
+    {
+      "body": "c246_chassis",
+      "pos_sensor": "c246_pos"
+    },
+    {
+      "body": "c247_chassis",
+      "pos_sensor": "c247_pos"
+    },
+    {
+      "body": "c248_chassis",
+      "pos_sensor": "c248_pos"
+    },
+    {
+      "body": "c249_chassis",
+      "pos_sensor": "c249_pos"
+    }
+  ],
+  "routing": {
+    "route_seed": 0,
+    "n_routes": 1024,
+    "max_length_m": 1500.0,
+    "car_routes": [
+      871,
+      652,
+      523,
+      276,
+      315,
+      41,
+      77,
+      16,
+      179,
+      832,
+      665,
+      934,
+      515,
+      621,
+      994,
+      747,
+      647,
+      556,
+      573,
+      957,
+      284,
+      835,
+      686,
+      2,
+      403,
+      877,
+      567,
+      34,
+      783,
+      747,
+      866,
+      179,
+      91,
+      883,
+      22,
+      554,
+      82,
+      306,
+      492,
+      432,
+      412,
+      28,
+      5,
+      127,
+      8,
+      686,
+      538,
+      662,
+      263,
+      630,
+      782,
+      392,
+      471,
+      1021,
+      824,
+      1004,
+      388,
+      701,
+      972,
+      666,
+      860,
+      704,
+      720,
+      398,
+      896,
+      138,
+      592,
+      738,
+      865,
+      537,
+      384,
+      317,
+      433,
+      497,
+      736,
+      910,
+      74,
+      956,
+      544,
+      366,
+      688,
+      585,
+      260,
+      329,
+      736,
+      608,
+      516,
+      346,
+      778,
+      401,
+      336,
+      911,
+      270,
+      232,
+      731,
+      638,
+      49,
+      86,
+      386,
+      852,
+      410,
+      805,
+      324,
+      245,
+      810,
+      897,
+      81,
+      59,
+      687,
+      344,
+      587,
+      153,
+      880,
+      461,
+      916,
+      815,
+      722,
+      236,
+      785,
+      53,
+      583,
+      414,
+      1020,
+      203,
+      969,
+      92,
+      638,
+      594,
+      920,
+      305,
+      923,
+      688,
+      911,
+      204,
+      776,
+      964,
+      49,
+      373,
+      651,
+      108,
+      522,
+      644,
+      782,
+      949,
+      419,
+      450,
+      485,
+      977,
+      200,
+      511,
+      51,
+      435,
+      968,
+      635,
+      358,
+      1018,
+      618,
+      971,
+      16,
+      471,
+      854,
+      775,
+      417,
+      509,
+      430,
+      542,
+      235,
+      804,
+      79,
+      424,
+      288,
+      752,
+      767,
+      728,
+      946,
+      954,
+      189,
+      117,
+      135,
+      746,
+      993,
+      949,
+      684,
+      991,
+      892,
+      15,
+      122,
+      884,
+      84,
+      1004,
+      847,
+      980,
+      368,
+      152,
+      529,
+      995,
+      376,
+      911,
+      393,
+      842,
+      235,
+      491,
+      334,
+      237,
+      914,
+      821,
+      143,
+      945,
+      994,
+      272,
+      436,
+      551,
+      672,
+      453,
+      152,
+      953,
+      708,
+      41,
+      833,
+      749,
+      187,
+      629,
+      513,
+      29,
+      949,
+      736,
+      317,
+      16,
+      93,
+      776,
+      152,
+      525,
+      920,
+      951,
+      274,
+      67,
+      506,
+      861,
+      639,
+      68,
+      665,
+      352,
+      231,
+      440,
+      894,
+      989,
+      144,
+      575,
+      779,
+      265
+    ]
+  },
+  "cameras": [
+    "drone",
+    "oblique"
+  ],
+  "map": {
+    "center_utm_minus_origin": [
+      787.3246081820689,
+      719.9461836139672
+    ],
+    "origin_utm": [
+      551245.1177893202,
+      4181799.481621331
+    ],
+    "crs": "EPSG:32610",
+    "note": "scene meters are UTM-origin-shifted, recentred on map middle"
+  }
+}

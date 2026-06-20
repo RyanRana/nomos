@@ -15,3 +15,4 @@ smoothride/demo/web/config.js
 # generated cache & build metadata
 cache/
 *.egg-info/
+smoothride/demo/cesium/config.js

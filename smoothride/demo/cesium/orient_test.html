@@ -1,0 +1,36 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<script>window.CESIUM_BASE_URL="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/";</script>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet"/>
+<style>html,body,#c{width:100%;height:100%;margin:0}</style></head>
+<body><div id="c"></div>
+<script>
+// Orientation probe: one car MOVING DUE EAST, camera looking straight down with
+// north up -> east is to the RIGHT of frame. If the car's nose points right, the
+// model forward axis + orientation are correct. Red line = east (motion).
+const BODY = new URLSearchParams(location.search).get("body") || "sedan";
+const v = new Cesium.Viewer("c",{baseLayer:false,animation:false,timeline:false,
+  geocoder:false,baseLayerPicker:false,homeButton:false,sceneModePicker:false,
+  navigationHelpButton:false,fullscreenButton:false,infoBox:false});
+v.scene.globe.show = true; v.scene.skyBox.show=false; v.scene.backgroundColor=Cesium.Color.DIMGRAY;
+const lon=-122.0,lat=37.0, t0=Cesium.JulianDate.now();
+const pos=new Cesium.SampledPositionProperty();
+for(let s=0;s<=20;s++) pos.addSample(Cesium.JulianDate.addSeconds(t0,s,new Cesium.JulianDate()),
+  Cesium.Cartesian3.fromDegrees(lon+s*0.00012, lat, 30));
+pos.setInterpolationOptions({interpolationDegree:1,interpolationAlgorithm:Cesium.LinearApproximation});
+v.clock.startTime=t0.clone(); v.clock.currentTime=Cesium.JulianDate.addSeconds(t0,10,new Cesium.JulianDate());
+v.clock.shouldAnimate=false;
+v.entities.add({position:pos,orientation:new Cesium.VelocityOrientationProperty(pos),
+  model:{uri:`./assets/${BODY}.glb`,minimumPixelSize:80,scale:3,
+    colorBlendMode:Cesium.ColorBlendMode.HIGHLIGHT}});
+// east reference (red) and north reference (green)
+v.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArrayHeights(
+  [lon,lat,30, lon+0.0016,lat,30]),width:6,material:Cesium.Color.RED}});
+v.entities.add({polyline:{positions:Cesium.Cartesian3.fromDegreesArrayHeights(
+  [lon,lat,30, lon,lat+0.0013,30]),width:6,material:Cesium.Color.LIME}});
+// camera straight down, north up
+v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(lon-0.00045,lat-0.00010,12),
+  orientation:{heading:Cesium.Math.toRadians(80),pitch:Cesium.Math.toRadians(-12),roll:0}});
+window.__ready=false;
+v.scene.postRender.addEventListener(()=>{window.__ready=true;});
+</script></body></html>

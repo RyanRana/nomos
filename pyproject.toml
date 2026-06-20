@@ -35,6 +35,14 @@ demo = [
 lowlevel = [
   "modal>=0.64",
 ]
+# worldsim: 3D physics-car path on the Antim/HUD worldsim (Newton). Newton itself
+# runs in the Modal GPU image (render_modal.py); locally you only need the launcher
+# + mujoco to author/validate scenes. Install:  pip install -e ".[worldsim]"
+worldsim = [
+  "modal>=0.64",
+  "mujoco>=3.2",
+  "imageio>=2.34",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

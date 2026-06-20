@@ -67,7 +67,8 @@ def collect(env: K.Env, ts: TrainState, key, n_worlds: int):
             nst, nobs, reward, done, info = K.step(env, st, action, kn)
             out = dict(obs=obs, gf=gf, action=action, logp=logp,
                        value=value, reward=reward,
-                       cost=info["just_crashed"].astype(jnp.float32))
+                       cost=info["just_crashed"].astype(jnp.float32),
+                       offlane=info["offlane"], wrongway=info["wrongway"])
             return (nst, nobs), out
 
         ks_steps = jax.random.split(ks, env.max_steps)
@@ -164,5 +165,7 @@ def update(env: K.Env, cfg: PPOConfig, ts: TrainState, batch, lam=0.0):
         "ep_reward": batch["reward"].sum(1).mean(),     # per-world-agent episode sum
         "crashes_per_car": batch["final_crashes"].mean(),
         "goals_per_agent": batch["final_goals"].mean(),
+        "offlane_rate": batch["offlane"].mean(),        # frac of car-steps off-lane
+        "wrongway_rate": batch["wrongway"].mean(),      # frac of car-steps wrong-way
     }
     return ts, metrics

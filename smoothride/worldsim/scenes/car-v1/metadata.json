@@ -1,0 +1,44 @@
+{
+  "scene_id": "car-v1",
+  "description": "A single rear-wheel-drive, Ackermann-steered physics car on flat asphalt. The WheeledLab-equivalent body as plain MJCF, loaded by Newton's MJCF importer and driven by the generic worldsim step(action) tool. Smoke scene for the controller before the full SF city.",
+  "source": "hand-crafted",
+  "format": "mjcf",
+  "engine": "newton",
+  "embodiment": "ackermann_car",
+  "control": {
+    "tool": "step",
+    "action_dim": 4,
+    "action_layout": "[drive_rl, drive_rr, steer_l, steer_r]",
+    "action_descriptions": {
+      "drive_rl": "rear-left wheel target angular velocity (rad/s); + = forward",
+      "drive_rr": "rear-right wheel target angular velocity (rad/s); + = forward",
+      "steer_l": "left steering angle (rad), range [-0.7, 0.7]; + = left",
+      "steer_r": "right steering angle (rad), range [-0.7, 0.7]; + = left"
+    },
+    "wheel_radius_m": 0.33,
+    "wheelbase_m": 2.7,
+    "track_m": 1.7,
+    "note": "forward ground speed (m/s) = drive * wheel_radius_m"
+  },
+  "objects": {
+    "chassis": {
+      "type": "free",
+      "description": "Car body; read pose with get_object_state('chassis')",
+      "initial_position": [0.0, 0.0, 0.45]
+    }
+  },
+  "sensors": {
+    "chassis_pos": "framepos of the chassis (x, y, z)",
+    "chassis_quat": "framequat of the chassis",
+    "chassis_linvel": "linear velocity of the chassis (world frame)",
+    "chassis_up": "chassis z-axis (for a flipped-over check)"
+  },
+  "cameras": ["chase", "overhead"],
+  "tasks": {
+    "reach-waypoint": {
+      "target_object": "chassis",
+      "description": "Drive the chassis to a goal (x, y) without flipping",
+      "success_radius_m": 2.0
+    }
+  }
+}

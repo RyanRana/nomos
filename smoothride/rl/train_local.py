@@ -43,6 +43,10 @@ def main():
     ap.add_argument("--lagrangian", action="store_true",
                     help="PPO-Lagrangian: adaptive crash-constraint multiplier")
     ap.add_argument("--crash-target", type=float, default=0.3, dest="crash_target")
+    ap.add_argument("--w-offlane", type=float, default=0.0, dest="w_offlane",
+                    help="reward penalty for leaving the lane (train lawful driving)")
+    ap.add_argument("--w-wrongway", type=float, default=0.0, dest="w_wrongway",
+                    help="reward penalty for driving against the route direction")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -57,6 +61,8 @@ def main():
                             max_length_m=2500.0 if args.big else 700.0, seed=args.seed)
     # Lagrangian: zero the fixed crash penalty so the adaptive multiplier owns it
     extra = {"w_collision": 0.0} if args.lagrangian else {}
+    # traffic-law shaping weights (0 => identical to legacy training)
+    extra.update(w_offlane=args.w_offlane, w_wrongway=args.w_wrongway)
     env = K.make_env(pool, (x0, y0), (x1, y1), n_agents=args.agents,
                      n_peds=args.peds, max_steps=args.steps, v_max=args.vmax, **extra)
     print(f"map: nodes={net.n_nodes} edges={net.n_edges}")
@@ -86,7 +92,9 @@ def main():
             m["lam"] = round(lam, 1)
         history.append(m)
         lam_s = f"lam {lam:6.1f} | " if args.lagrangian else ""
-        print(f"it {it:3d} | reward {m['ep_reward']:8.1f} | {lam_s}"
+        law_s = (f"offlane {m['offlane_rate']*100:4.1f}% | "
+                 f"wrongway {m['wrongway_rate']*100:4.1f}% | ")
+        print(f"it {it:3d} | reward {m['ep_reward']:8.1f} | {lam_s}{law_s}"
               f"crashes/car {m['crashes_per_car']:.2f} | "
               f"goals/agent {m['goals_per_agent']:.2f} | {m['sec']}s", flush=True)
         # periodic checkpoint so artifacts can be rendered mid-training

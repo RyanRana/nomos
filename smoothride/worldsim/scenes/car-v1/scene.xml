@@ -1,0 +1,94 @@
+<mujoco model="car-v1">
+  <!--
+    A rear-wheel-drive, Ackermann-steered physics car for the Antim/HUD worldsim
+    template (Newton physics). This is the WheeledLab-equivalent body, but as plain
+    MJCF — Newton loads it via its MuJoCo importer, and the generic worldsim
+    `step(action)` tool drives the actuators directly. No Isaac, no GPU gating.
+
+    CONTROL CONTRACT (action vector order == <actuator> order below):
+        action = [drive_rl, drive_rr, steer_l, steer_r]
+          drive_*  : target wheel angular velocity (rad/s), rear wheels  -> throttle
+          steer_*  : target steering angle (rad), front wheels           -> steering
+    Read the car back with get_object_state("chassis") + the chassis_* sensors.
+  -->
+  <compiler angle="radian" autolimits="true"/>
+  <option gravity="0 0 -9.81" timestep="0.004" integrator="implicitfast"/>
+
+  <default>
+    <joint damping="0.2"/>
+    <geom condim="4" friction="1.3 0.02 0.001"/>
+    <!-- wheels: a bit grippier, low rolling resistance -->
+    <default class="wheel">
+      <geom type="cylinder" size="0.33 0.12" euler="1.5708 0 0" rgba="0.1 0.1 0.12 1"
+            friction="1.6 0.02 0.001" mass="15"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.25 0.27 0.30" rgb2="0.20 0.22 0.25"
+             width="128" height="128"/>
+    <material name="asphalt" texture="grid" texrepeat="40 40" reflectance="0.02"/>
+    <material name="car_body" rgba="0.20 0.55 0.85 1" specular="0.5" shininess="0.4"/>
+    <material name="cabin" rgba="0.12 0.14 0.18 1" specular="0.6" shininess="0.6"/>
+  </asset>
+
+  <worldbody>
+    <light name="sun" pos="10 -10 20" dir="-0.4 0.4 -1" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2"/>
+    <geom name="floor" type="plane" size="120 120 0.1" material="asphalt"/>
+
+    <!-- a fixed drone camera; the chase camera lives on the chassis so it follows -->
+    <camera name="overhead" pos="0 0 40" xyaxes="1 0 0 0 1 0"/>
+
+    <body name="chassis" pos="0 0 0.45">
+      <freejoint name="chassis_joint"/>
+      <geom name="chassis_geom" type="box" size="2.1 0.85 0.22" mass="1100" material="car_body"/>
+      <geom name="cabin_geom" type="box" size="1.1 0.78 0.25" pos="-0.2 0 0.42" mass="120" material="cabin"/>
+      <!-- chase cam tracks the chassis center of mass -->
+      <camera name="chase" pos="-9 0 3.5" xyaxes="0 -1 0 0.35 0 1" mode="trackcom"/>
+
+      <!-- ===== front-left: steer hinge -> roll hinge -> wheel ===== -->
+      <body name="steer_fl" pos="1.35 0.85 -0.1">
+        <inertial pos="0 0 0" mass="2" diaginertia="0.05 0.05 0.05"/>
+        <joint name="steer_l" type="hinge" axis="0 0 1" range="-0.7 0.7"/>
+        <body name="wheel_fl">
+          <joint name="roll_fl" type="hinge" axis="0 1 0"/>
+          <geom class="wheel"/>
+        </body>
+      </body>
+      <!-- ===== front-right ===== -->
+      <body name="steer_fr" pos="1.35 -0.85 -0.1">
+        <inertial pos="0 0 0" mass="2" diaginertia="0.05 0.05 0.05"/>
+        <joint name="steer_r" type="hinge" axis="0 0 1" range="-0.7 0.7"/>
+        <body name="wheel_fr">
+          <joint name="roll_fr" type="hinge" axis="0 1 0"/>
+          <geom class="wheel"/>
+        </body>
+      </body>
+      <!-- ===== rear-left (driven) ===== -->
+      <body name="wheel_rl" pos="-1.35 0.85 -0.1">
+        <joint name="roll_rl" type="hinge" axis="0 1 0"/>
+        <geom class="wheel"/>
+      </body>
+      <!-- ===== rear-right (driven) ===== -->
+      <body name="wheel_rr" pos="-1.35 -0.85 -0.1">
+        <joint name="roll_rr" type="hinge" axis="0 1 0"/>
+        <geom class="wheel"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- ORDER IS THE ACTION CONTRACT: [drive_rl, drive_rr, steer_l, steer_r] -->
+    <velocity name="drive_rl" joint="roll_rl" kv="120" ctrlrange="-40 80"/>
+    <velocity name="drive_rr" joint="roll_rr" kv="120" ctrlrange="-40 80"/>
+    <position name="steer_l"  joint="steer_l" kp="2000" ctrlrange="-0.7 0.7"/>
+    <position name="steer_r"  joint="steer_r" kp="2000" ctrlrange="-0.7 0.7"/>
+  </actuator>
+
+  <sensor>
+    <framepos    name="chassis_pos" objtype="body" objname="chassis"/>
+    <framequat   name="chassis_quat" objtype="body" objname="chassis"/>
+    <framelinvel name="chassis_linvel" objtype="body" objname="chassis"/>
+    <framezaxis  name="chassis_up" objtype="body" objname="chassis"/>
+  </sensor>
+</mujoco>

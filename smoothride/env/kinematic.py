@@ -69,6 +69,11 @@ class Env:
     w_ped: float = struct.field(pytree_node=False, default=80.0)
     w_yield: float = struct.field(pytree_node=False, default=1.5)
     w_goal: float = struct.field(pytree_node=False, default=15.0)
+    # traffic-law shaping (off by default; turned on to train LAWFUL driving):
+    #   w_offlane  -> continuous penalty ramping up as the car leaves its lane
+    #   w_wrongway -> penalty for heading against the route while moving
+    w_offlane: float = struct.field(pytree_node=False, default=0.0)
+    w_wrongway: float = struct.field(pytree_node=False, default=0.0)
 
     @property
     def obs_dim(self) -> int:
@@ -267,12 +272,14 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     cand = _candidates(env, pos)
     valid = (cand >= 0) & (cand != jnp.arange(N)[:, None])
     rel = pos[cand] - pos[:, None, :]
-    cd = jnp.where(valid, jnp.linalg.norm(rel, axis=-1), 1e9)
-    min_d = cd.min(1)
-    # spawn_grace: a car that just respawned ("merged in") is immune for a few
-    # steps, so a respawn landing near another car is not counted as a (spurious)
-    # teleport-overlap crash. Real cars enter from map edges, not on top of others.
+    # spawn_grace: a car that just entered ("merged in") is immune for a few steps.
+    # A just-spawned car is also EXCLUDED as a collision partner, so dropping a fresh
+    # car near a moving one never registers a (spurious) crash for EITHER side — only
+    # genuine car-to-car contact between two established cars counts.
     immune = st.spawn_grace > 0
+    neighbor_ok = valid & ~immune[cand]
+    cd = jnp.where(neighbor_ok, jnp.linalg.norm(rel, axis=-1), 1e9)
+    min_d = cd.min(1)
     car_crash = (min_d < env.collision_radius) & ~immune
     prox_pen = jnp.clip((env.prox_radius - min_d) / env.prox_radius, 0, 1)
 
@@ -292,6 +299,17 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     should_yield = near_junc & jnp.any(has_priority, axis=1)
     yield_pen = (should_yield & (speed > env.idle_speed)).astype(jnp.float32)
 
+    # traffic-law shaping: penalize leaving the lane / driving the wrong way, on the
+    # post-dynamics (pre-respawn) state. Lazy import avoids a kinematic<->legality
+    # import cycle. off-lane is CONTINUOUS (ramps from half-a-lane off to fully off)
+    # so the policy gets a dense "stay in lane" gradient instead of a sparse flag.
+    from . import legality as _LG
+    law_st = st.replace(pos=pos, heading=heading, speed=speed, wp_ptr=wp_ptr)
+    law = _LG.evaluate(env, law_st)
+    offlane_pen = jnp.clip((law["lateral"] - 0.5 * env.lane_width) / env.lane_width,
+                           0.0, 1.0)
+    wrongway_pen = law["wrong_way"].astype(jnp.float32)
+
     # respawn cars that finished a trip OR crashed (a crash clears, not freezes)
     respawn = new_goal | crash_event
     new_idx = jax.random.randint(kidx, (N,), 0, env.routes_xy.shape[0])
@@ -301,7 +319,11 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     heading = jnp.where(respawn, rs_head, heading)
     wp_ptr = jnp.where(respawn, rs_wp, wp_ptr)
     lane = jnp.where(respawn, 0, lane)
-    speed = jnp.where(respawn, 0.0, speed)
+    # merge INTO traffic at a sensible cruising speed instead of appearing as a dead
+    # stop in a moving lane (which got the fresh car rear-ended the moment its grace
+    # ended). Speed is capped by the spawn edge's limit.
+    merge_speed = 0.6 * jnp.minimum(env.v_max, env.routes_speed[new_idx, rs_wp])
+    speed = jnp.where(respawn, merge_speed, speed)
     goals = st.goals + new_goal.astype(jnp.int32)
     crashes = st.crashes + crash_event.astype(jnp.int32)
     ped_pos, ped_dir = _ped_step(env, st, kped)
@@ -314,6 +336,7 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
         - env.w_yield * yield_pen
         - env.w_collision * car_crash.astype(jnp.float32)
         - env.w_ped * ped_hit.astype(jnp.float32)
+        - env.w_offlane * offlane_pen - env.w_wrongway * wrongway_pen
         + env.w_goal * new_goal.astype(jnp.float32)
     )
 
@@ -325,7 +348,9 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     info = {"just_crashed": crash_event, "crashes": crashes,
             "goals": goals, "total_goals": goals.sum(),
             "crashes_per_car": crashes.mean(), "ped_hits": ped_hit.sum(),
-            "mean_speed": jnp.mean(speed)}
+            "mean_speed": jnp.mean(speed),
+            "offlane": law["off_lane"].astype(jnp.float32),     # (N,) 1=off-lane
+            "wrongway": wrongway_pen}                            # (N,) 1=wrong-way
     return nst, _observe(env, nst, _candidates(env, pos)), reward, t >= env.max_steps, info
 
 
