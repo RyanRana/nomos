@@ -56,14 +56,19 @@ async function main() {
 
   world.cars.forEach((car) => addCar(viewer, car, start, meta));
 
-  // HUD
+  // HUD — trips and crashed both update LIVE at the current frame (start at 0),
+  // not the end-of-run totals (which made "crashed" read non-zero before playback).
   document.getElementById("cars").textContent = world.summary.cars;
+  document.getElementById("trips").textContent = world.trips_series[0];
+  document.getElementById("crashed").textContent =
+    world.cars.reduce((n, c) => n + (c.crash[0] || 0), 0);
   viewer.clock.onTick.addEventListener(() => {
-    const frac = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start) / (meta.dt);
+    const frac = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start) / meta.dt;
     const f = Math.max(0, Math.min(world.trips_series.length - 1, Math.round(frac)));
     document.getElementById("trips").textContent = world.trips_series[f];
+    document.getElementById("crashed").textContent =
+      world.cars.reduce((n, c) => n + (c.crash[f] || 0), 0);
   });
-  document.getElementById("crashed").textContent = world.summary.crashed_end;
 
   // Frame the city: fit the scene's bounding sphere with a fixed oblique tilt, so
   // the whole street grid fills the view at any bbox size (a fixed-altitude flyTo
@@ -109,8 +114,11 @@ function addCar(viewer, car, start, meta) {
   const orientation = new Cesium.CallbackProperty((time) => {
     const p = pos.getValue(time);
     if (!p) return undefined;
+    // Box length (dimensions.x = body +X) must point along travel. Cesium heading
+    // rotates about -Z (clockwise from East), and sim hdg is CCW from East, so the
+    // angle that aligns +X with travel is -hdg (NOT pi/2-hdg, which faces sideways).
     const hdg = car.hdg[frameIndex(car, start, time, meta)];
-    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.PI_OVER_TWO - hdg, 0, 0);
+    const hpr = new Cesium.HeadingPitchRoll(-hdg, 0, 0);
     return Cesium.Transforms.headingPitchRollQuaternion(p, hpr);
   }, false);
   viewer.entities.add({
