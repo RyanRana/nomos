@@ -49,5 +49,12 @@
   - Monitors: poll volume for trained_<tag>_it*.msgpack + history_<tag>.json; quiet (snapshot+crash, complete, error).
 - **Round 2 plan (after round1):** take the lever(s) that cut car-ped most (slow? attention? both), then sweep density/cruise_cap to find the frontier, then LOO across regions via --regions (multi-region T5 still UNBUILT — build it before LOO).
 - NOTE: v2-T4 (end-on-done eval trim) still UNBUILT (cosmetic, low priority). v2-T5 multi-region DONE (8825398).
-- _v2val (deepsets) plateaued ~0.44 crash/car (it100) — baseline arch insufficient for intersection-ped task. Awaiting _v2slow (slow+heavy-ped) & _v2att (attention).
+- ROUND 1 (downtown, 96 cars/300 peds) it50: _v2val 0.48, _v2slow(cruise4/wped8) 0.40, _v2att(attention) 0.50. ALL ~0.4-0.5 crash/car. car-car ~0 everywhere (car-risk hinge works). Conclusion: cost/speed/ARCH do NOT crack car-ped at 300 intersection-peds. It's a DENSITY problem (target 0.005/car is ~90x below current).
+- ROUND 2 = density frontier at TARGET 300 cars (downtown, cruise4/wped8, worlds16, steps250, 150it). Find max peds holding <=0.5% crash:
+  - _v2c300p150 ap-TSrKU4ZN8nAJ7YaERwaFoR
+  - _v2c300p80  ap-3eGrU0SXLFlgZNjlSDzhO8
+  - _v2c300p40  ap-uu8beReHqceyUVZ3c8Tskj
+  - _v2c300p15  ap-ELAdZ94LyqsGWxSJgYRXQL
+  consolidated monitor; expect ~1.5-2h (300 cars slow). Round1 (val/slow/att) also finishing for the 96-car points.
+- ROUND 3 (after frontier): take the safe (cars,peds) point, run LOO via --regions across {downtown,mission,nopa,chinatown_fidi}, eval held-out.
 - **Best config so far:** v1 `trained_peds` (0.068, but that was mid-block peds). v2 car-car solved; car-ped is the open problem.
