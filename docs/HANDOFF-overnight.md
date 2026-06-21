@@ -42,5 +42,11 @@
 - **Next action:** VALIDATION run `_v2val` launched (dual-channel, downtown, 96 cars/300 peds, 150 iters, crash-target 0.0). Watching lam_hard for saturation. If crashes drop & stable → build T5(multi-region)/T6(attention)/T4 and start LOO+density+arch sweeps. v2 run flags: --crash-target/--soft-target/--w-carped.
 - **Running Modal jobs:** none yet.
 - **KEY INSIGHT:** graded car-risk hinge => car-car ~0. Remaining crashes are car-PED, worsened by intersection crossings (peds at conflict points). Lever = lower cruise_cap + higher w_carped + earlier yield. May also need a density/speed frontier (fewer peds or slower).
-- **Running:** _v2val (deepsets baseline, finishing), _v2slow (cruise_cap4/w_carped8 corrective). Next: attention arch + density/speed sweep + LOO once a config gets car-ped low.
+- **Running (round 1, downtown, 96 cars/300 peds):**
+  - _v2val  deepsets baseline (150it)  app ap-qtE0yvBZlX6fmJotmdRJbm  — trending crash/car ~0.44, car-car~0, car-ped HIGH
+  - _v2slow cruise_cap4 w_carped8 (200it) app ap-h53Ftfqja2ROtt54TyBIpm
+  - _v2att  attention arch (150it)      app ap-S5IpYn8sBuKFokOvfOAgyW
+  - Monitors: poll volume for trained_<tag>_it*.msgpack + history_<tag>.json; quiet (snapshot+crash, complete, error).
+- **Round 2 plan (after round1):** take the lever(s) that cut car-ped most (slow? attention? both), then sweep density/cruise_cap to find the frontier, then LOO across regions via --regions (multi-region T5 still UNBUILT — build it before LOO).
+- NOTE: v2-T4 (end-on-done) and v2-T5 (multi-region/--regions) still UNBUILT.
 - **Best config so far:** v1 `trained_peds` (0.068, but that was mid-block peds). v2 car-car solved; car-ped is the open problem.
