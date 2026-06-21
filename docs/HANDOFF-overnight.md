@@ -52,6 +52,12 @@
   pull numbers: for tg in ...; do modal volume get smoothride-nav-ckpts history$tg.json /tmp/h$tg.json --force; python3 -c "import json,sys;m=json.load(open('/tmp/h'+sys.argv[1]+'.json'))[-1];print(sys.argv[1],m['iter'],round(m['crashes_per_car'],3))" $tg; done
 ## NEXT after round4: eval _v4loo on held-out mission (export_cesium/eval); pick best safe config; render a clean demo scene; final summary in this file.
 
+
+## *** HEADLINE: LOO GENERALIZES — held-out Mission eval of _v4loo ***
+  TRAINED (downtown+nopa+chinatown, NEVER saw mission): crashes 1/96 = 1% | arrivals 71% | wrong-way 0% | off-lane 11%/step (soft, not collisions)
+  vs v1 downtown->mission = 12% crashes. => ~12x cross-map SAFETY improvement. 1/96 ~= 3/300 ~ target band.
+  THESIS RESULT: graded car-risk + dual-channel(crash_target0) + slow cruise + low ped density + MULTI-REGION training => ~1% crash on an UNSEEN SF neighborhood.
+
 ## Experiment results (append every run)
 | tag | region(s) train | eval region | arch | cars | peds | iters | crash/car | car-ped | car-car | arrived% | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -79,4 +85,4 @@
   - _v2c300p15  ap-ELAdZ94LyqsGWxSJgYRXQL
   consolidated monitor; expect ~1.5-2h (300 cars slow). Round1 (val/slow/att) also finishing for the 96-car points.
 - ROUND 3 (after frontier): take the safe (cars,peds) point, run LOO via --regions across {downtown,mission,nopa,chinatown_fidi}, eval held-out.
-- **Best config so far:** v1 `trained_peds` (0.068, but that was mid-block peds). v2 car-car solved; car-ped is the open problem.
+- **BEST SO FAR:** _v4loo (multi-region) => 1% crash on HELD-OUT mission (generalizes). In-distribution: ~0.9% @96/5. Round5 pushing to <=0.5% + longer LOO (_v5loolong). NEXT: when round5 done, pull numbers, eval _v5loolong on held-out mission, render a demo scene, write FINAL SUMMARY here.
