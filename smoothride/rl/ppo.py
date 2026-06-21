@@ -16,7 +16,12 @@ import optax
 from flax.training.train_state import TrainState
 
 from ..env import kinematic as K
-from .networks import ActorCritic, gaussian_entropy, gaussian_logp
+from .networks import (
+    ActorCritic,
+    gaussian_entropy,
+    squash_sample,
+    squashed_gaussian_logp,
+)
 
 
 @dataclass(frozen=True)
@@ -74,8 +79,11 @@ def collect(env: K.Env, ts: TrainState, key, n_worlds: int):
             mean, log_std, value = ts.apply_fn(ts.params, obs, gf)
             ka, kn = jax.random.split(k)
             noise = jax.random.normal(ka, mean.shape)
-            action = mean + jnp.exp(log_std) * noise
-            logp = gaussian_logp(action, mean, log_std)
+            # Tanh-squashed Gaussian: sample raw ~ Normal(mean, std), squash to
+            # action = tanh(raw) in (-1, 1), and compute the change-of-variables
+            # log-prob. The stored SQUASHED action is what the env consumes
+            # (the env's [-1,1] clip is now a no-op by construction).
+            action, logp = squash_sample(mean, log_std, noise)
             nst, nobs, reward, done, info = K.step(env, st, action, kn)
             out = dict(obs=obs, gf=gf, action=action, logp=logp,
                        value=value, reward=reward,
@@ -270,7 +278,9 @@ def update(
 
     def ppo_loss(params, ob, g, ac, olp, advv, rets):
         mean, log_std, value = ts.apply_fn(params, ob, g)
-        logp = gaussian_logp(ac, mean, log_std)
+        # Recompute the squashed log-prob from the stored squashed action via the
+        # atanh round-trip (must mirror the squashing used in collect()).
+        logp = squashed_gaussian_logp(ac, mean, log_std)
         ratio = jnp.exp(logp - olp)
         unclipped = ratio * advv
         clipped = jnp.clip(ratio, 1 - cfg.clip, 1 + cfg.clip) * advv

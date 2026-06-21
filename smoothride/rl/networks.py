@@ -66,8 +66,14 @@ class ActorCritic(nn.Module):
         x = nn.tanh(nn.Dense(self.hidden)(x))
         mean = nn.Dense(self.act_dim,
                         kernel_init=nn.initializers.orthogonal(0.01))(x)
-        log_std = self.param("log_std",
-                             nn.initializers.constant(-0.5), (self.act_dim,))
+        # State-DEPENDENT log_std: a head off the same actor trunk, so exploration
+        # noise adapts to context (cruising an empty road vs. threading between a
+        # pedestrian and a car). Clamped to a safe range to keep std numerically
+        # bounded — exp(-5)≈0.007 (near-deterministic) .. exp(2)≈7.4 (very broad).
+        log_std = nn.Dense(self.act_dim,
+                           kernel_init=nn.initializers.orthogonal(0.01),
+                           bias_init=nn.initializers.constant(-0.5))(x)
+        log_std = jnp.clip(log_std, -5.0, 2.0)
 
         # --- critic: centralized, local feature + pooled scene summary ---
         c = jnp.concatenate([feat, global_feat], axis=-1)
@@ -178,4 +184,68 @@ def gaussian_logp(actions, mean, log_std):
 
 
 def gaussian_entropy(log_std):
+    """Closed-form differential entropy of a diagonal Gaussian, summed over dims.
+
+    Used as the exploration bonus for the tanh-squashed policy as well: we keep
+    the entropy of the PRE-squash Gaussian rather than the (intractable in closed
+    form) entropy of the squashed distribution. This is a standard, accepted
+    approximation (the tanh Jacobian term shifts entropy but the pre-squash
+    entropy is a smooth, well-behaved proxy that still rewards wider std).
+    """
     return (log_std + 0.5 * jnp.log(2 * jnp.pi * jnp.e)).sum(-1)
+
+
+# Numerical-stability constants for the tanh change-of-variables.
+_ATANH_EPS = 1e-6   # clamp |a| away from 1 before atanh (atanh(±1) = ±inf)
+_LOGDET_EPS = 1e-6  # floor on (1 - a^2) inside the log Jacobian term
+
+
+def squashed_gaussian_logp(action, mean, log_std):
+    """Log-prob of a tanh-squashed diagonal Gaussian at a SQUASHED action.
+
+    The policy samples ``raw ~ Normal(mean, exp(log_std))`` and emits
+    ``a = tanh(raw)`` as the env action, so actions live in (-1, 1) by
+    construction. The change-of-variables (Jacobian) correction is::
+
+        log pi(a) = sum_d [ normal_logp(raw_d; mean_d, std_d)
+                            - log(1 - tanh(raw_d)^2 + eps) ]
+
+    Given a stored squashed action ``a`` we recover the pre-squash sample with
+    ``raw = atanh(clip(a, -1+eps, 1-eps))`` (numerically stable at the boundary)
+    and use ``1 - a^2`` directly for the log-det term.
+
+    Args:
+        action: Squashed actions in (-1, 1), shape ``(..., act_dim)``.
+        mean: Pre-squash Gaussian mean, shape ``(..., act_dim)``.
+        log_std: Pre-squash Gaussian log-std, shape ``(..., act_dim)``.
+
+    Returns:
+        Log-prob per sample, shape ``(...,)`` (summed over the action dim).
+    """
+    a = jnp.clip(action, -1.0 + _ATANH_EPS, 1.0 - _ATANH_EPS)
+    raw = jnp.arctanh(a)
+    base = gaussian_logp(raw, mean, log_std)
+    log_det = jnp.log(1.0 - a ** 2 + _LOGDET_EPS).sum(-1)
+    return base - log_det
+
+
+def squash_sample(mean, log_std, noise):
+    """Reparameterised sample of the tanh-squashed policy + its log-prob.
+
+    Args:
+        mean: Pre-squash Gaussian mean, shape ``(..., act_dim)``.
+        log_std: Pre-squash Gaussian log-std, shape ``(..., act_dim)``.
+        noise: Standard-normal noise, same shape as ``mean``.
+
+    Returns:
+        ``(action, logp)`` where ``action = tanh(mean + std*noise)`` lies strictly
+        in (-1, 1) and ``logp`` is the squashed log-prob of that action.
+    """
+    raw = mean + jnp.exp(log_std) * noise
+    action = jnp.tanh(raw)
+    # Use the raw sample directly (no atanh round-trip) for sampling-time logp:
+    # this is the exact pre-squash value, so the Jacobian uses tanh(raw)^2.
+    base = gaussian_logp(raw, mean, log_std)
+    log_det = jnp.log(1.0 - jnp.tanh(raw) ** 2 + _LOGDET_EPS).sum(-1)
+    logp = base - log_det
+    return action, logp

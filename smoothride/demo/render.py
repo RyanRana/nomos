@@ -23,7 +23,6 @@ from ..data.map_loader import RoadNetwork, load_road_network  # noqa: E402
 from ..env import kinematic as K  # noqa: E402
 from ..env.routing import build_route_pool  # noqa: E402
 from ..rl import ppo  # noqa: E402
-from ..rl.networks import gaussian_logp  # noqa: E402
 
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "runs"))
 
@@ -51,8 +50,11 @@ def rollout(env: K.Env, params, key, sample=True, safe=False, filt="vo"):
         gf = _global_feat(obs)
         mean, log_std, _ = net.apply(params, obs, gf)
         ka, kn = jax.random.split(k)
-        action = mean + (jnp.exp(log_std) * jax.random.normal(ka, mean.shape)
-                         if sample else 0.0)
+        # Tanh-squashed policy: squash the (optionally sampled) pre-tanh value so
+        # the rendered actions match the distribution the policy was trained on.
+        raw = mean + (jnp.exp(log_std) * jax.random.normal(ka, mean.shape)
+                      if sample else 0.0)
+        action = jnp.tanh(raw)
         if safe:
             action = filter_fn(env, st, action)
         nst, nobs, r, done, info = K.step(env, st, action, kn)

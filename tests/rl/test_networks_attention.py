@@ -103,9 +103,9 @@ def test_actor_critic_attention_encoder_forward() -> None:
     params = net.init(jax.random.PRNGKey(0), obs, gf)
     mean, log_std, value = net.apply(params, obs, gf)
 
-    # shapes
+    # shapes (state-dependent log_std head: per-agent, same shape as mean)
     assert mean.shape[-1] == env.act_dim, f"mean.shape[-1]={mean.shape[-1]} != {env.act_dim}"
-    assert log_std.shape == (env.act_dim,), f"log_std.shape={log_std.shape}"
+    assert log_std.shape == mean.shape, f"log_std.shape={log_std.shape} != {mean.shape}"
     assert value.shape == mean.shape[:-1], f"value.shape={value.shape} != {mean.shape[:-1]}"
 
     # finiteness
@@ -127,7 +127,7 @@ def test_actor_critic_deepsets_encoder_regression() -> None:
     mean, log_std, value = net.apply(params, obs, gf)
 
     assert mean.shape[-1] == env.act_dim
-    assert log_std.shape == (env.act_dim,)
+    assert log_std.shape == mean.shape
     assert value.shape == mean.shape[:-1]
     assert jnp.all(jnp.isfinite(mean))
     assert jnp.all(jnp.isfinite(log_std))

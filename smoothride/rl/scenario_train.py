@@ -22,7 +22,7 @@ from ..data.scenarios import BIG_BBOX, mine, pick_representatives, window_net
 from ..env import kinematic as K
 from ..env.routing import RoutePool, build_route_pool
 from . import ppo
-from .networks import gaussian_logp
+from .networks import squash_sample
 from .safety import safe_action
 
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "runs"))
@@ -87,8 +87,9 @@ def collect_scenarios(env_b, ts, key, shield=True):
             gf = ppo._global_feat(obs)
             mean, log_std, value = ts.apply_fn(ts.params, obs, gf)
             ka, kn = jax.random.split(k)
-            action = mean + jnp.exp(log_std) * jax.random.normal(ka, mean.shape)
-            logp = gaussian_logp(action, mean, log_std)
+            noise = jax.random.normal(ka, mean.shape)
+            # Tanh-squashed sample (action in (-1,1)) + change-of-variables logp.
+            action, logp = squash_sample(mean, log_std, noise)
             exec_a = safe_action(env, st, action) if shield else action
             nst, nobs, r, done, info = K.step(env, st, exec_a, kn)
             return (nst, nobs), dict(obs=obs, gf=gf, action=action, logp=logp,
