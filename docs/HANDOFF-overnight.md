@@ -27,7 +27,7 @@
 - v2-T2 graded car-risk + cost components + car_crash/ped_hit — ✅ DONE (a0efd8a)
 - v2-T3 dual-channel PPO + dual-Lagrangian (crash_target→0) — ✅ DONE (536f724, 159 tests)
 - v2-T4 end-on-all-done trim (eval honesty) — ⬜ pending
-- v2-T5 multi-region round-robin (`--regions`) for LOO — ⬜ pending
+- v2-T5 multi-region round-robin (--regions) — ✅ DONE (8825398, 174 tests)
 - v2-T6 attention encoder (--arch attention) — ✅ DONE (5adc7bf, 166 tests)
 
 ## Experiment results (append every run)
@@ -48,5 +48,6 @@
   - _v2att  attention arch (150it)      app ap-S5IpYn8sBuKFokOvfOAgyW
   - Monitors: poll volume for trained_<tag>_it*.msgpack + history_<tag>.json; quiet (snapshot+crash, complete, error).
 - **Round 2 plan (after round1):** take the lever(s) that cut car-ped most (slow? attention? both), then sweep density/cruise_cap to find the frontier, then LOO across regions via --regions (multi-region T5 still UNBUILT — build it before LOO).
-- NOTE: v2-T4 (end-on-done) and v2-T5 (multi-region/--regions) still UNBUILT.
+- NOTE: v2-T4 (end-on-done eval trim) still UNBUILT (cosmetic, low priority). v2-T5 multi-region DONE (8825398).
+- _v2val (deepsets) plateaued ~0.44 crash/car (it100) — baseline arch insufficient for intersection-ped task. Awaiting _v2slow (slow+heavy-ped) & _v2att (attention).
 - **Best config so far:** v1 `trained_peds` (0.068, but that was mid-block peds). v2 car-car solved; car-ped is the open problem.
