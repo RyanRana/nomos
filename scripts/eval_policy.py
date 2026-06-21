@@ -25,7 +25,7 @@ from smoothride.env import kinematic as K
 from smoothride.env.routing import build_route_pool
 from smoothride.rl.networks import ActorCritic
 from smoothride.rl.trace import Trace, TraceManifest
-from smoothride.rl.verifier import verify
+from smoothride.rl.verifier import _lane_flags, verify
 
 # A held-out SF region (Western Addition / Alamo Square / NoPa) — well clear of the
 # downtown training box, same dense grid character.
@@ -84,14 +84,23 @@ def policy_trace(env: K.Env, params, key, n_steps: int, sample: bool = False) ->
         collision_radius=float(env.collision_radius), lane_width=float(env.lane_width))
 
 
-def report(name: str, v, n: int) -> None:
+def report(name: str, v, n: int, trace: Trace) -> None:
     valid_cars = sum(c.valid for c in v.per_car)
+    # per-STEP rates over active (not-yet-arrived) car-steps, so a single brief
+    # excursion doesn't read like chronic violation the way the any-step counts do.
+    lat, off, ww = _lane_flags(trace.pos, trace.seg_start, trace.seg_end, trace.lane_count,
+                               trace.lane_width, trace.heading, trace.speed, trace.spawn_grace)
+    active = ~trace.arrived
+    denom = max(int(active.sum()), 1)
     print(f"\n[{name}]")
     print(f"  arrivals (throughput) : {v.throughput}/{n}  ({100*v.throughput/n:.0f}%)   "
           f"mean travel time: {v.mean_travel_time:.1f}s")
     print(f"  crashes               : {v.crash_count}/{n}  ({100*v.crash_count/n:.0f}%)")
-    print(f"  off-lane              : {v.off_lane_count}/{n}    wrong-way: {v.wrong_way_count}/{n}    "
-          f"over-speed: {v.speed_violation_count}/{n}")
+    print(f"  ANY-STEP counts (strict / safety-gate): off-lane {v.off_lane_count}/{n}  "
+          f"wrong-way {v.wrong_way_count}/{n}  over-speed {v.speed_violation_count}/{n}")
+    print(f"  PER-STEP rates (policy quality): off-lane {100*(off&active).sum()/denom:.1f}%  "
+          f"wrong-way {100*(ww&active).sum()/denom:.1f}%  mean lateral {lat[active].mean():.2f}m "
+          f"(lane {trace.lane_width}m)")
     print(f"  fully-valid (no violation any step): {valid_cars}/{n}  valid_run={v.valid_run}")
 
 
@@ -120,7 +129,7 @@ def main() -> None:
     for name, ckpt in [("untrained (baseline)", a.untrained), ("TRAINED policy", a.trained)]:
         params = load_params(env, ckpt)
         tr = policy_trace(env, params, jax.random.PRNGKey(a.seed), a.steps, sample=False)
-        report(name, verify(tr), a.agents)
+        report(name, verify(tr), a.agents, tr)
 
 
 if __name__ == "__main__":
