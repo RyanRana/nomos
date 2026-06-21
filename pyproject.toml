@@ -35,6 +35,18 @@ demo = [
 lowlevel = [
   "modal>=0.64",
 ]
+# dev: test toolchain. The verifier/trace layer is pure numpy + pytest, so it is
+# verifiable on its own without the JAX `rl` stack.
+dev = [
+  "pytest>=8.0",
+  "numpy>=1.26",
+]
+
+[tool.pytest.ini_options]
+# Make `smoothride` importable without an editable install (keeps the pure-numpy
+# verifier tests off the JAX install path).
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["setuptools>=68"]
