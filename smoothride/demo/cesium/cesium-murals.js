@@ -142,6 +142,7 @@ function skinBuildingsWithAtlas(tileset, atlas, opts = {}) {
     },
     fragmentShaderText: `
       void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+        material.alpha = 1.0;                                // fully opaque facades
         // Position in the fixed local ENU frame (meters from scene center).
         vec3 rel = fsInput.attributes.positionWC - u_origin;
         // World-space surface normal (eye normal -> world; czm_inverseView works here).
@@ -213,6 +214,7 @@ function skinBuildingsWithImage(tileset, image, opts = {}) {
     },
     fragmentShaderText: `
       void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+        material.alpha = 1.0;                                // fully opaque facades
         // Orientation from WORLD space (directions only -> precision-tolerant).
         vec3 posW = fsInput.attributes.positionWC;
         vec3 up   = normalize(posW);                        // geocentric up ~ local up

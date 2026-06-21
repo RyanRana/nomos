@@ -1,444 +1,502 @@
-/* SmoothRide Cesium viewer — replays a scene.json (schema v1) of meshed cars on
-   3D San Francisco. Terrain + OSM buildings when an ion token is present; flat
-   ellipsoid + our extruded GeoJSON buildings otherwise.
+// Real 3D San Francisco + the Nomos fleet driving on it.
+// Map = Cesium World Terrain + OSM Buildings. Cars = procedural GLB models
+// (worldsim/assets: sedan/suv/coupe), each given a RANDOM body + palette color,
+// driven along the exported RL trajectories and oriented by per-frame heading.
+const TOKEN = new URLSearchParams(location.search).get("ionToken")
+  || (window.CESIUM_ION_TOKEN && window.CESIUM_ION_TOKEN !== "PASTE_YOUR_CESIUM_ION_TOKEN"
+        ? window.CESIUM_ION_TOKEN : null);
 
-   Supports an optional public/manifest.json (written by the training-export
-   script) that lists multiple scene snapshots keyed by training iteration.  When
-   present the HUD exposes a dropdown so the user can switch between snapshots and
-   watch the policy improve.  When absent the viewer falls back to the legacy
-   single-file behaviour (public/scene.json). */
+const SF = { lon: -122.4090, lat: 37.7886 };
+const TRAJ_URL = "../web/public/trajectories.json";
+const AMBER = Cesium.Color.fromCssColorString("#f59e0b").withAlpha(0.5);
 
-const CFG = window.SMOOTHRIDE_CONFIG || { cesiumIonToken: "" };
-const WORLD = "trained";          // which world to animate
-const CAR_L = 4.6, CAR_W = 2.0, CAR_H = 1.5;   // meters
+// Image pasted onto building facades. Drop a file next to index.html and set its
+// name here (transparent PNG works). Override at runtime with ?mural=<url>.
+const MURAL_IMAGE = new URLSearchParams(location.search).get("mural") || "./building-side.png";
 
-// ---------------------------------------------------------------------------
-// Viewer-level state (initialised once; scene state is reset per loadScene call)
-// ---------------------------------------------------------------------------
+// Facade images: each building is randomly skinned with one of these. URL-encode the
+// folder name because it contains a space ("building sides").
+const SIDE_IMAGES = [1, 2, 3, 4, 5].map((n) => `./building%20sides/side${n}.jpg`);
 
-let _viewer = null;          // single Cesium.Viewer instance reused across loads
-let _sceneEntityIds = [];    // IDs of entities added for the current scene (cars, peds, roads, buildings)
-let _clockTickListener = null;  // handle for the per-scene onTick subscription
-let _geoJsonBuildingsFallback = false;  // true when OSM Buildings failed; loadScene adds GeoJSON per scene
+// How to apply them: "tile" = pictures stacked up the facade at a fixed size, kept
+// undistorted (default). "single" = stretch one photo to fill the whole facade.
+// Switch with ?skin=single.
+const SKIN_MODE = new URLSearchParams(location.search).get("skin") === "single" ? "single" : "tile";
 
-// ---------------------------------------------------------------------------
-// Bootstrap: create viewer once, then load from manifest or fallback
-// ---------------------------------------------------------------------------
+// Draw a labeled placeholder skin so murals render even before you supply a photo.
+function placeholderMural() {
+  const cv = document.createElement("canvas");
+  cv.width = 512; cv.height = 768;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#182030"; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = "#5a96d2";
+  for (let y = 40; y < cv.height; y += 90)
+    for (let x = 40; x < cv.width; x += 90) g.fillRect(x, y, 55, 60);
+  g.strokeStyle = "#ffb428"; g.lineWidth = 8; g.strokeRect(4, 4, cv.width - 8, cv.height - 8);
+  g.fillStyle = "#fff"; g.font = "bold 64px sans-serif"; g.textAlign = "center";
+  g.fillText("MURAL", cv.width / 2, cv.height / 2);
+  return cv;
+}
 
-async function main() {
-  const hasToken = !!CFG.cesiumIonToken;
-  if (hasToken) Cesium.Ion.defaultAccessToken = CFG.cesiumIonToken;
-
-  _viewer = new Cesium.Viewer("cesiumContainer", {
-    terrainProvider: hasToken
-      ? await Cesium.createWorldTerrainAsync()
-      : new Cesium.EllipsoidTerrainProvider(),
-    // baseLayer:false => no default Cesium-ion imagery (which 401s without a
-    // token). Without a token we drape free OpenStreetMap tiles instead, so the
-    // real SF street grid is visible offline; with a token, ion world imagery.
-    baseLayer: hasToken ? undefined : false,
-    animation: true, timeline: true, baseLayerPicker: false, geocoder: false,
+// Resolve to the configured image if it loads, else the placeholder canvas.
+function resolveMuralImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => { console.warn(`mural image "${url}" not found — using placeholder`); resolve(placeholderMural()); };
+    img.src = url;
   });
-  _viewer.scene.globe.depthTestAgainstTerrain = true;
-  window.viewer = _viewer;   // handy for console debugging (single-viewer app)
+}
 
-  if (!hasToken) {
-    _viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
-      url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-      maximumLevel: 19, credit: "© OpenStreetMap contributors",
+// ---- the procedural fleet: 3 body GLBs × a color palette (worldsim/assets) ----
+const BODIES = ["sedan", "suv", "coupe"];
+const PALETTE = [
+  "#c81f1f", "#2166c8", "#e6e6eb", "#17171c", "#a8b0b8",
+  "#198050", "#edc724", "#f0731a", "#19999e", "#73192e",
+].map((h) => Cesium.Color.fromCssColorString(h));
+
+// deterministic per-car RNG -> a car keeps its body+color across frames/reloads
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function carLook(i) {
+  const r = mulberry32(0x5eed + (i * 2654435761) | 0);
+  return { body: BODIES[Math.floor(r() * BODIES.length)],
+           color: PALETTE[Math.floor(r() * PALETTE.length)] };
+}
+
+function msg(html) {
+  const el = document.getElementById("msg");
+  el.innerHTML = html; el.setAttribute("data-show", "");
+}
+window.addEventListener("error", (e) => msg(`<div>Error: <code>${e.message}</code></div>`));
+window.addEventListener("unhandledrejection",
+  (e) => msg(`<div>Error: <code>${(e.reason && (e.reason.message || e.reason)) || e.reason}</code></div>`));
+
+async function boot() {
+  if (typeof Cesium === "undefined") return msg("<div>Cesium failed to load (CDN).</div>");
+  if (TOKEN) Cesium.Ion.defaultAccessToken = TOKEN;
+
+  const opts = {
+    animation: true, timeline: true, geocoder: false, baseLayerPicker: false,
+    homeButton: false, sceneModePicker: false, navigationHelpButton: false,
+    fullscreenButton: false, infoBox: false, selectionIndicator: false,
+  };
+  if (TOKEN) opts.terrain = Cesium.Terrain.fromWorldTerrain();
+  else opts.baseLayer = false;
+
+  const viewer = new Cesium.Viewer("cesiumContainer", opts);
+  viewer.scene.globe.depthTestAgainstTerrain = !!TOKEN;
+  window.viewer = viewer; // exposed for the GIF capture harness
+
+  let muralImg = null;
+  if (TOKEN) {
+    try {
+      const osm = await Cesium.createOsmBuildingsAsync();
+      viewer.scene.primitives.add(osm);
+      window.osmBuildings = osm; // exposed for the GIF capture harness
+      // Faster first paint: load coarser tiles, skip intermediate LODs instead of
+      // streaming every level, and only refine to full detail once the camera
+      // settles. Override the look with ?sse=<n> (lower = sharper but slower).
+      const sse = Number(new URLSearchParams(location.search).get("sse")) || 20;
+      osm.maximumScreenSpaceError = sse;          // detail target
+      osm.skipLevelOfDetail = true;               // jump straight toward the target LOD
+      osm.baseScreenSpaceError = 1024;
+      osm.skipScreenSpaceErrorFactor = 16;
+      osm.skipLevels = 1;
+      // SOLID buildings: dynamic-SSE dithers/fades tiles while the camera moves,
+      // which reads as low-opacity ghost buildings — turn it off so facades stay opaque.
+      osm.dynamicScreenSpaceError = false;
+      // Load NEARBY first + keep what's loaded so panning back doesn't re-stream (less lag):
+      osm.foveatedScreenSpaceError = true;        // sharp near screen centre...
+      osm.foveatedConeSize = 0.3;                 // ...cheaper at the edges
+      osm.preloadFlightDestinations = true;       // prefetch where the camera is heading
+      osm.cacheBytes = 1073741824;                // 1 GB tile cache (was tiny -> constant reload)
+      osm.maximumCacheOverflowBytes = 1073741824;
+      // Skin EVERY building, each randomly assigned one of the side images.
+      try {
+        const atlas = await buildImageAtlas(SIDE_IMAGES);
+        // Square footprint (wall == floor) so the square atlas cell isn't re-stretched
+        // on the wall -> pictures stay undistorted as they stack.
+        skinBuildingsWithAtlas(osm, atlas, {
+          mode: SKIN_MODE, center: [SF.lon, SF.lat], wallMeters: 16, floorMeters: 16,
+        });
+        console.log(`Skinned buildings: ${atlas.count} images, mode=${SKIN_MODE}.`);
+      } catch (e) {
+        console.warn("atlas skin failed, falling back to single placeholder:", e);
+        muralImg = await resolveMuralImage(MURAL_IMAGE);
+        skinBuildingsWithImage(osm, muralImg, { wallMeters: 14, floorMeters: 18 });
+      }
+      // Also allow click-to-place flat murals on specific walls.
+      if (viewer.scene.pickPositionSupported) {
+        muralImg = muralImg || await resolveMuralImage(MURAL_IMAGE);
+        enableClickToPlaceMural(viewer, muralImg, { height: 120 });
+      }
+    } catch (e) { console.warn("OSM Buildings unavailable:", e); }
+  } else {
+    viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+      url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", maximumLevel: 19,
+      credit: "© OpenStreetMap contributors",
     }));
   }
 
-  // OSM Buildings (ion) are viewer-level, loaded once.
-  if (hasToken) {
-    try { _viewer.scene.primitives.add(await Cesium.createOsmBuildingsAsync()); }
-    catch (e) {
-      _geoJsonBuildingsFallback = true;
-      console.warn("OSM Buildings unavailable; falling back to GeoJSON buildings per scene", e);
-    }
+  // ---- the fleet (optional: map still works if trajectories aren't generated) ----
+  let center = [SF.lon, SF.lat];
+  try {
+    // cache:no-store so a freshly regenerated (bigger) trajectories.json is never
+    // served stale from the browser cache — otherwise you keep seeing the old fleet.
+    const DATA = await (await fetch(TRAJ_URL, { cache: "no-store" })).json();
+    center = DATA.meta.center || center;
+    addFleet(viewer, DATA);
+  } catch (e) {
+    console.warn("no trajectories.json — showing the empty map:", e);
+    msg(`<div>Map only — generate cars with
+      <code>python -m smoothride.demo.export_web</code>, then reload.</div>`);
+    setTimeout(() => document.getElementById("msg").removeAttribute("data-show"), 4000);
   }
 
-  // Try to load the manifest; fall back to the legacy single scene path.
-  let manifest = null;
-  try {
-    const resp = await fetch("public/manifest.json", { cache: "no-store" });
-    if (resp.ok) {
-      const parsed = await resp.json();
-      if (parsed && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) {
-        manifest = parsed;
+  // Start zoomed into the downtown pocket. URL params let an external capture
+  // harness frame a specific intersection/edge case:
+  //   ?lon=&lat=&alt=&pitch=&heading=  -> camera   ?t=<frame>&pause=1 -> freeze time
+  const q = new URLSearchParams(location.search);
+  const camLon = parseFloat(q.get("lon")), camLat = parseFloat(q.get("lat"));
+  const alt = parseFloat(q.get("alt")) || 300;
+  const pitch = parseFloat(q.get("pitch")) || -32;
+  const heading = parseFloat(q.get("heading")) || 0;
+  const dest = (!isNaN(camLon) && !isNaN(camLat))
+    ? Cesium.Cartesian3.fromDegrees(camLon, camLat, alt)
+    : Cesium.Cartesian3.fromDegrees(center[0], center[1] - 0.0019, alt);
+  viewer.camera.flyTo({
+    destination: dest,
+    orientation: { heading: Cesium.Math.toRadians(heading),
+                   pitch: Cesium.Math.toRadians(pitch), roll: 0 },
+    duration: q.has("lon") ? 0 : 1.5,
+  });
+
+  const tf = parseInt(q.get("t"), 10);
+  if (!isNaN(tf) && viewer.clock) {
+    viewer.clock.currentTime = Cesium.JulianDate.addSeconds(
+      viewer.clock.startTime, tf * (window.__DT || 0.2), new Cesium.JulianDate());
+    if (q.get("pause") === "1") viewer.clock.shouldAnimate = false;
+  }
+}
+
+// Build the animation clock + both worlds: trained = 3D model fleet, untrained =
+// faint "shadow world" points (gridlock), so the learning delta still reads.
+function addFleet(viewer, DATA) {
+  const NF = DATA.meta.n_steps, DT = DATA.meta.dt;
+  window.__DT = DT;                 // for the ?t=<frame> capture param
+  const start = Cesium.JulianDate.now();
+  const stop = Cesium.JulianDate.addSeconds(start, NF * DT, new Cesium.JulianDate());
+  Object.assign(viewer.clock, {
+    startTime: start.clone(), stopTime: stop.clone(), currentTime: start.clone(),
+    clockRange: Cesium.ClockRange.LOOP_STOP, multiplier: 2.0, shouldAnimate: true,
+  });
+  if (viewer.timeline) viewer.timeline.zoomTo(start, stop);
+
+  const timeAt = (t) => Cesium.JulianDate.addSeconds(start, t * DT, new Cesium.JulianDate());
+
+  // The 2D env continuously RESPAWNS a car (on goal/crash) at a new spot on its
+  // route. That's a teleport: interpolating across it streaks the car over the
+  // whole map and makes it pop in/out. So split each car's track into CONTINUOUS
+  // trip segments — break wherever it jumps more than a car could plausibly move
+  // in one step — and render each segment as its own entity that only exists
+  // (availability) while on that drive. No streaks; spread spawns keep the field
+  // full. JUMP scales off the speed limit so it adapts to the export's dt/stride.
+  const JUMP = Math.max(25, (DATA.meta.vmax || 16) * DT * 5);
+  function carto(c, t) { return Cesium.Cartesian3.fromDegrees(c.lng[t], c.lat[t], 0); }
+
+  function segments(c) {
+    const segs = [];
+    let s = 0;
+    for (let t = 1; t < NF; t++) {
+      if (Cesium.Cartesian3.distance(carto(c, t - 1), carto(c, t)) > JUMP) {
+        if (t - 1 > s) segs.push([s, t - 1]);
+        s = t;
       }
     }
-  } catch (_) {
-    // manifest absent or malformed — fall back silently
+    if (NF - 1 > s) segs.push([s, NF - 1]);
+    return segs;
   }
 
-  const select = document.getElementById("scene-select");
-  const sceneRow = document.getElementById("scene-row");
-
-  if (manifest) {
-    // Populate dropdown with manifest entries (manifest is already sorted by iter).
-    manifest.scenes.forEach((entry) => {
-      const opt = document.createElement("option");
-      opt.value = entry.file;
-      opt.textContent = entry.label;
-      select.appendChild(opt);
-    });
-
-    // Default to the LAST (most-trained) entry.
-    select.selectedIndex = manifest.scenes.length - 1;
-    sceneRow.style.display = "flex";
-
-    select.addEventListener("change", () => {
-      loadScene("public/" + select.value);
-    });
-
-    await loadScene("public/" + manifest.scenes[manifest.scenes.length - 1].file);
-  } else {
-    // Backward-compat: no manifest — load legacy scene.json, keep dropdown hidden.
-    sceneRow.style.display = "none";
-    await loadScene("public/scene.json");
+  // One persistent entity per car. To keep it ALWAYS on screen and never
+  // teleporting, take the car's LONGEST continuous trip and HOLD position at both
+  // ends (extrapolation) — so it drives its real route, then waits parked at a real
+  // road spot instead of streaking away or blinking out on a respawn.
+  function longestTrip(c) {
+    const segs = segments(c);
+    if (!segs.length) return null;
+    return segs.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
   }
-}
-
-// ---------------------------------------------------------------------------
-// Scene loader — fetches one scene file and renders it, replacing the prior scene
-// ---------------------------------------------------------------------------
-
-async function loadScene(path) {
-  clearScene();
-
-  const scene = await (await fetch(path, { cache: "no-store" })).json();
-  if (scene.schema_version !== 1) throw new Error("unsupported schema " + scene.schema_version);
-  // Prefer the conventional "trained" world; otherwise fall back to the first
-  // world in the scene (snapshot scenes carry a single world per file), so the
-  // viewer never depends on a specific world key.
-  const meta = scene.meta;
-  const world = scene.worlds[WORLD] || scene.worlds[Object.keys(scene.worlds)[0]];
-  if (!world) throw new Error("scene has no worlds to render");
-
-  // Per-scene GeoJSON buildings: used when (a) no ion token, or (b) token present
-  // but OSM Buildings failed at startup (_geoJsonBuildingsFallback === true).
-  // OSM Buildings are a viewer-level primitive (loaded once in main()) and must
-  // NOT be double-added here when they loaded successfully.
-  const hasToken = !!CFG.cesiumIonToken;
-  if (!hasToken || _geoJsonBuildingsFallback) addGeoJsonBuildings(_viewer, scene);
-
-  drawRoads(_viewer, scene.roads);
-
-  // Time window for playback.
-  const start = Cesium.JulianDate.now();
-  const stop = Cesium.JulianDate.addSeconds(start, meta.dt * (meta.n_steps - 1), new Cesium.JulianDate());
-  _viewer.clock.startTime = start.clone();
-  _viewer.clock.stopTime = stop.clone();
-  _viewer.clock.currentTime = start.clone();
-  _viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-  _viewer.clock.multiplier = 1.0;
-  _viewer.timeline.zoomTo(start, stop);
-
-  world.cars.forEach((car) => addCar(_viewer, car, start, meta));
-  (world.peds || []).forEach((ped) => addPed(_viewer, ped, start, meta));
-
-  // HUD — trips and crashed both update LIVE at the current frame (start at 0),
-  // not the end-of-run totals (which made "crashed" read non-zero before playback).
-  document.getElementById("cars").textContent = world.summary.cars;
-  document.getElementById("trips").textContent = world.trips_series[0];
-  document.getElementById("crashed").textContent =
-    world.cars.reduce((n, c) => n + (c.crash[0] || 0), 0);
-
-  // Telemetry dashboard — precompute series + run totals, then drive it live.
-  setupDashboard(scene, world, meta);
-  updateDashboard(0);
-
-  _clockTickListener = () => {
-    const frac = Cesium.JulianDate.secondsDifference(_viewer.clock.currentTime, start) / meta.dt;
-    const f = Math.max(0, Math.min(world.trips_series.length - 1, Math.round(frac)));
-    document.getElementById("trips").textContent = world.trips_series[f];
-    document.getElementById("crashed").textContent =
-      world.cars.reduce((n, c) => n + (c.crash[f] || 0), 0);
-    updateDashboard(f);
-  };
-  _viewer.clock.onTick.addEventListener(_clockTickListener);
-
-  // Frame the city: fit the scene's bounding sphere with a fixed oblique tilt, so
-  // the whole street grid fills the view at any bbox size (a fixed-altitude flyTo
-  // leaves a small city as a speck under a horizon of the rest of the state).
-  // bounds is [[wLon,sLat],[eLon,nLat]] (SW, NE).
-  const [[wLon, sLat], [eLon, nLat]] = meta.bounds;
-  const sphere = Cesium.BoundingSphere.fromPoints([
-    Cesium.Cartesian3.fromDegrees(wLon, sLat),
-    Cesium.Cartesian3.fromDegrees(eLon, nLat),
-  ]);
-  _viewer.camera.flyToBoundingSphere(sphere, {
-    offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), sphere.radius * 2.4),
-    duration: 0,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Scene cleanup — removes all per-scene entities and the clock-tick listener
-// ---------------------------------------------------------------------------
-
-function clearScene() {
-  if (!_viewer) return;   // guard: no-op if called before viewer is initialized
-  // Remove only the entities we added for the previous scene.
-  _sceneEntityIds.forEach((id) => {
-    const entity = _viewer.entities.getById(id);
-    if (entity) _viewer.entities.remove(entity);
-  });
-  _sceneEntityIds = [];
-
-  // Detach the previous onTick handler so it doesn't reference stale data.
-  if (_clockTickListener) {
-    _viewer.clock.onTick.removeEventListener(_clockTickListener);
-    _clockTickListener = null;
+  function tripPos(c, t0, t1) {
+    const pos = new Cesium.SampledPositionProperty();
+    for (let t = t0; t <= t1; t++) pos.addSample(timeAt(t), carto(c, t));
+    pos.setInterpolationOptions({ interpolationDegree: 1,
+      interpolationAlgorithm: Cesium.LinearApproximation });
+    pos.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    pos.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    return pos;
   }
-}
 
-// ---------------------------------------------------------------------------
-// Entity helpers — each wraps viewer.entities.add and records the returned id
-// ---------------------------------------------------------------------------
-
-function trackEntity(entity) {
-  _sceneEntityIds.push(entity.id);
-  return entity;
-}
-
-function sampledPosition(car, start, meta) {
-  const p = new Cesium.SampledPositionProperty();
-  for (let t = 0; t < car.lng.length; t++) {
-    const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
-    p.addSample(when, Cesium.Cartesian3.fromDegrees(car.lng[t], car.lat[t], ((car.z && car.z[t]) || 0) + CAR_H / 2));
-  }
-  return p;
-}
-
-// Pedestrians: small upright markers (amber), ~1.7 m tall, walking on the terrain.
-const PED_H = 1.7;
-function addPed(viewer, ped, start, meta) {
-  const pos = new Cesium.SampledPositionProperty();
-  for (let t = 0; t < ped.lng.length; t++) {
-    const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
-    pos.addSample(when, Cesium.Cartesian3.fromDegrees(ped.lng[t], ped.lat[t], ((ped.z && ped.z[t]) || 0) + PED_H / 2));
-  }
-  trackEntity(viewer.entities.add({
-    position: pos,
-    cylinder: {
-      length: PED_H, topRadius: 0.3, bottomRadius: 0.35,
-      material: Cesium.Color.fromCssColorString("#f59e0b"),  // amber, distinct from cars
-    },
-  }));
-}
-
-// Per-car colour by state: red = crashed, green = arrived (trip complete),
-// blue = en route (brighter the faster it's going). Crash takes priority — a car
-// is at most one of these since arrival/crash are terminal (remove-on-arrival).
-const CRASH_RED = Cesium.Color.fromCssColorString("#ef4444");
-const DONE_GREEN = Cesium.Color.fromCssColorString("#22c55e");
-function carColor(car, i, vmax) {
-  if (car.crash[i]) return CRASH_RED;
-  if (car.arr && car.arr[i]) return DONE_GREEN;
-  const f = Math.max(0, Math.min(1, car.spd[i] / (vmax || 16)));
-  return Cesium.Color.fromHsl(0.58, 0.85, 0.4 + 0.25 * f);   // en route: blue, brighter=faster
-}
-
-function frameIndex(car, start, time, meta) {
-  const f = Cesium.JulianDate.secondsDifference(time, start) / meta.dt;
-  return Math.max(0, Math.min(car.lng.length - 1, Math.round(f)));
-}
-
-function addCar(viewer, car, start, meta) {
-  const pos = sampledPosition(car, start, meta);
-  // Orient by the sim's OWN heading (car.hdg), not by velocity: hdg is the car's
-  // true facing every step, so the box faces forward while driving and never
-  // spins on a stop or a respawn-teleport (where velocity orientation goes wild).
-  // Sim heading is radians CCW from east; Cesium heading is CW from north, hence
-  // (pi/2 - hdg). Box dimensions.x (CAR_L, the length) lies along that heading.
-  const orientation = new Cesium.CallbackProperty((time) => {
-    const p = pos.getValue(time);
-    if (!p) return undefined;
-    // Box length (dimensions.x = body +X) must point along travel. Cesium heading
-    // rotates about -Z (clockwise from East), and sim hdg is CCW from East, so the
-    // angle that aligns +X with travel is -hdg (NOT pi/2-hdg, which faces sideways).
-    const hdg = car.hdg[frameIndex(car, start, time, meta)];
-    const hpr = new Cesium.HeadingPitchRoll(-hdg, 0, 0);
-    return Cesium.Transforms.headingPitchRollQuaternion(p, hpr);
-  }, false);
-  trackEntity(viewer.entities.add({
-    position: pos,
-    orientation: orientation,
-    box: {
-      dimensions: new Cesium.Cartesian3(CAR_L, CAR_W, CAR_H),
-      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty((time) => {
-        return carColor(car, frameIndex(car, start, time, meta), meta.vmax);
-      }, false)),
-    },
-  }));
-}
-
-function drawRoads(viewer, roads) {
-  roads.forEach((seg) => {
-    trackEntity(viewer.entities.add({
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights(
-          [seg[0][0], seg[0][1], seg[0][2], seg[1][0], seg[1][1], seg[1][2]]),
-        width: 3, material: Cesium.Color.fromCssColorString("#22d3ee").withAlpha(0.9),
-        clampToGround: false,
-      },
-    }));
-  });
-}
-
-function addGeoJsonBuildings(viewer, scene) {
-  const fc = scene.buildings;
-  if (!fc || !fc.features) return;
-  fc.features.forEach((ft) => {
-    const ring = ft.geometry.coordinates[0];
-    const flat = [];
-    ring.forEach((p) => { flat.push(p[0], p[1]); });
-    trackEntity(viewer.entities.add({
-      polygon: {
-        hierarchy: Cesium.Cartesian3.fromDegreesArray(flat),
-        extrudedHeight: ft.properties.height || 8,
-        material: Cesium.Color.fromCssColorString("#1a2230").withAlpha(0.9),
-        outline: false,
-      },
-    }));
-  });
-}
-
-// ===========================================================================
-// Telemetry dashboard — precomputed per-step series + run totals, redrawn each
-// clock tick. Reads the SAME world the 3D viewer animates, so the panel and the
-// scene are always frame-synced. Pure 2D-canvas; no extra dependencies.
-// ===========================================================================
-
-let _dash = null;
-
-function _series(world, meta) {
-  const N = meta.n_steps, n = world.cars.length;
-  const mov = [], jam = [], cr = [], ms = [], cumCrashed = [];
-  const ever = new Set();
-  for (let t = 0; t < N; t++) {
-    let m = 0, j = 0, c = 0, sp = 0, k = 0;
-    world.cars.forEach((car, ci) => {
-      const tt = Math.min(t, car.spd.length - 1);
-      if (car.crash[tt]) { c++; ever.add(ci); }
-      else { if (car.spd[tt] > 0.4) m++; else j++; sp += Math.max(0, car.spd[tt]); k++; }
-    });
-    mov.push(m); jam.push(j); cr.push(c); ms.push(k ? sp / k : 0); cumCrashed.push(ever.size);
-  }
-  return { mov, jam, cr, ms, cumCrashed, trips: world.trips_series };
-}
-
-function _sizeCanvas(c) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
-  const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return x;
-}
-
-function setupDashboard(scene, world, meta) {
-  const N = meta.n_steps, n = world.cars.length, vmax = meta.vmax || 16;
-  const s = _series(world, meta);
-  // baseline (untrained) trips, if this scene carries a second world
-  const ub = scene.worlds.untrained && scene.worlds.untrained !== world
-    ? scene.worlds.untrained.trips_series : null;
-  // run totals (static)
-  let dist = 0, everN = s.cumCrashed[N - 1];
-  for (const car of world.cars) for (const v of car.spd) dist += Math.max(0, v) * meta.dt;
-  const avgMov = s.mov.reduce((a, b) => a + b, 0) / N / n * 100;
-  const avgSpd = s.ms.reduce((a, b) => a + b, 0) / N;
-  document.getElementById("da-crash").textContent = everN + " / " + n;
-  document.getElementById("da-crash").className = everN === 0 ? "ok" : "";
-  document.getElementById("da-mov").textContent = avgMov.toFixed(1) + "%";
-  document.getElementById("da-spd").textContent = avgSpd.toFixed(2) + " m/s";
-  _dash = { N, n, vmax, s, ub, meta, world };
-  // size canvases now and on resize
-  _dash.canvases = ["dc-trips", "dc-fleet", "dc-hist"].map((id) => document.getElementById(id));
-  _dash.ctx = _dash.canvases.map(_sizeCanvas);
-  if (!_dash._resizeBound) {
-    window.addEventListener("resize", () => { if (_dash) _dash.ctx = _dash.canvases.map(_sizeCanvas); });
-    _dash._resizeBound = true;
-  }
-}
-
-function _spdHsl(f) { return `hsl(${Math.max(0, Math.min(1, f)) * 140}, 80%, 52%)`; }
-
-function _lineChart(ctx, series, f) {
-  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, N = _dash.N;
-  ctx.clearRect(0, 0, w, h);
-  let mx = 1; for (const sr of series) for (const v of sr.data) mx = Math.max(mx, v);
-  ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
-  for (let g = 0; g <= 2; g++) { const y = 4 + g / 2 * (h - 12); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
-  for (const sr of series) {
-    if (sr.fill) {
-      ctx.beginPath();
-      for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - 4 - sr.data[i] / mx * (h - 12); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fillStyle = sr.fill; ctx.fill();
+  // Orientation from the exported heading, NOT velocity: VelocityOrientationProperty
+  // goes undefined at zero speed, so a stopped/parked car snapped to a default facing
+  // (the "turning sideways" glitch in stop-and-go). hdg is always defined. Cesium
+  // heading = -hdg (our hdg is CCW-from-east; Cesium heading is CW-from-north about
+  // the down axis) — verified the model's nose lands on +east with the orient probe.
+  function tripOri(c, t0, t1) {
+    const ori = new Cesium.SampledProperty(Cesium.Quaternion);
+    for (let t = t0; t <= t1; t++) {
+      const hpr = new Cesium.HeadingPitchRoll(-c.hdg[t], 0, 0);
+      ori.addSample(timeAt(t), Cesium.Transforms.headingPitchRollQuaternion(carto(c, t), hpr));
     }
-    ctx.beginPath();
-    for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - 4 - sr.data[i] / mx * (h - 12); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-    ctx.strokeStyle = sr.col; ctx.lineWidth = 2; ctx.stroke();
-    const cx = f / (N - 1) * w, cy = h - 4 - sr.data[Math.min(f, N - 1)] / mx * (h - 12);
-    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 7); ctx.fillStyle = sr.col; ctx.fill();
+    ori.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    ori.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    return ori;
   }
-  const px = f / (N - 1) * w; ctx.strokeStyle = "rgba(52,211,153,.4)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
-  ctx.fillStyle = "rgba(139,155,176,.7)"; ctx.font = "9px ui-monospace, Menlo, monospace";
-  ctx.fillText(String(Math.round(mx)), 3, 11);
+
+  // Distance LOD so the city feels populated everywhere you pan WITHOUT lag and
+  // WITHOUT cars popping in from nothing. Every car carries two graphics:
+  //   * a cheap dot  — always present, so wherever you look there are cars;
+  //   * the 3D model — only rendered within MODEL_FAR m of the camera (few dozen at
+  //     a time -> cheap). They CROSS-FADE: as you approach, the dot fades out
+  //     (translucencyByDistance) exactly as the model fades in, so it reads as
+  //     lazy-loaded detail resolving, not a spawn. Cesium frustum-culls whatever is
+  //     off-screen for free.
+  const MODEL_FAR = 600;          // model drawn within this many metres of camera
+  const carEntities = [];
+  DATA.worlds.trained.cars.forEach((c, i) => {
+    const trip = longestTrip(c);
+    if (!trip) return;
+    const look = carLook(i);
+    carEntities.push(viewer.entities.add({
+      position: tripPos(c, trip[0], trip[1]),
+      orientation: tripOri(c, trip[0], trip[1]),
+      point: {
+        pixelSize: 7, color: look.color,
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.4), outlineWidth: 1,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        // invisible when close (model takes over), opaque far -> the placeholder
+        translucencyByDistance: new Cesium.NearFarScalar(MODEL_FAR * 0.6, 0.0, MODEL_FAR, 1.0),
+      },
+      model: {
+        uri: `./assets/${look.body}.glb`,
+        minimumPixelSize: 24, maximumScale: 12, scale: 1.0,
+        color: look.color, colorBlendMode: Cesium.ColorBlendMode.MIX, colorBlendAmount: 0.65,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, MODEL_FAR),
+      },
+    }));
+  });
+
+  // ?track=<i> -> chase one car (handy for eyeballing orientation up close).
+  const track = parseInt(new URLSearchParams(location.search).get("track"), 10);
+  if (!isNaN(track) && carEntities[track]) viewer.trackedEntity = carEntities[track];
+
+  // untrained world -> faint shadow points (the gridlock the policy fixes).
+  (DATA.worlds.untrained ? DATA.worlds.untrained.cars : []).forEach((c) => {
+    const trip = longestTrip(c);
+    if (!trip) return;
+    viewer.entities.add({
+      position: tripPos(c, trip[0], trip[1]),
+      point: { pixelSize: 7, color: AMBER, outlineColor: Cesium.Color.BLACK.withAlpha(0.4),
+        outlineWidth: 1, heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY },
+    });
+  });
+
+  setupHUD(viewer, DATA, start, DT, NF);
+  addPedestrians(viewer, DATA, start, DT, NF);
 }
 
-function _stackChart(ctx, f) {
-  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, N = _dash.N, s = _dash.s;
-  ctx.clearRect(0, 0, w, h);
-  const tot = s.mov.map((m, i) => m + s.jam[i] + s.cr[i]), mx = Math.max(1, ...tot);
-  const layer = (arr, base, col) => {
-    ctx.beginPath();
-    for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - (base[i] + arr[i]) / mx * h; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-    for (let i = N - 1; i >= 0; i--) { const x = i / (N - 1) * w, y = h - base[i] / mx * h; ctx.lineTo(x, y); }
-    ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+// ---- pedestrians as simple 3D CHARACTERS (not dots) ----------------------
+// Each ped is a little 3D figure — a body cylinder + a head sphere — that walks
+// the sidewalks and stands on the terrain. Real world.peds trajectories are used
+// when the export carries them; otherwise an ambient crowd is synthesized, anchored
+// to real car routes, so the city reads as alive.
+
+const PED_SHIRTS = ["#2a7de1", "#e14b4b", "#2bb673", "#e0a92b", "#7b5bd6", "#d94f8a", "#e7ecf3", "#1f9e9e"]
+  .map((h) => Cesium.Color.fromCssColorString(h));
+const PED_SKINS = ["#f0c9a8", "#e8b98c", "#c98a5b", "#a86a3c"]
+  .map((h) => Cesium.Color.fromCssColorString(h));
+function pedLook(i) {
+  const r = mulberry32(0xa11ce + (i * 2654435761 | 0));
+  return { shirt: PED_SHIRTS[Math.floor(r() * PED_SHIRTS.length)],
+           skin: PED_SKINS[Math.floor(r() * PED_SKINS.length)] };
+}
+
+// Synthesize an ambient crowd: anchor each walker near a real car-route point (so
+// they end up beside streets), nudge to the sidewalk, then random-walk slowly and
+// stay within a small radius — a believable stroll, not RL agents.
+function synthPeds(DATA, NF, DT) {
+  const cars = DATA.worlds.trained.cars;
+  if (!cars || !cars.length) return [];
+  const n = Math.min(30, Math.max(16, Math.round(cars.length / 6)));
+  const rng = mulberry32(0x9ed5eed);
+  const peds = [];
+  for (let i = 0; i < n; i++) {
+    const c = cars[Math.floor(rng() * cars.length)];
+    const t0 = Math.floor(rng() * Math.max(1, c.lng.length - 1));
+    const lat0 = c.lat[t0], lng0 = c.lng[t0], cosl = Math.cos(lat0 * Math.PI / 180);
+    const off = 6 + rng() * 9, a0 = rng() * Math.PI * 2;
+    let x = Math.cos(a0) * off, y = Math.sin(a0) * off;
+    let hd = rng() * Math.PI * 2; const spd = 0.7 + rng() * 0.9;
+    const lng = [], lat = [];
+    for (let t = 0; t < NF; t++) {
+      hd += (rng() - 0.5) * 0.35;
+      x += Math.cos(hd) * spd * DT; y += Math.sin(hd) * spd * DT;
+      if (Math.hypot(x, y) > 32) hd += Math.PI;          // wander, but stay local
+      lng.push(lng0 + x / (111320 * cosl));
+      lat.push(lat0 + y / 111320);
+    }
+    peds.push({ lng, lat });
+  }
+  return peds;
+}
+
+function addPedestrians(viewer, DATA, start, DT, NF) {
+  const w = DATA.worlds.trained;
+  const peds = (w.peds && w.peds.length) ? w.peds : synthPeds(DATA, NF, DT);
+  const timeAt = (t) => Cesium.JulianDate.addSeconds(start, t * DT, new Cesium.JulianDate());
+  // A body part: the ped's (lng,lat) over time, lifted `h` metres above the ground
+  // (RELATIVE_TO_GROUND so the figure stands on the terrain, not at sea level).
+  function partPos(p, len, h) {
+    const pos = new Cesium.SampledPositionProperty();
+    for (let t = 0; t < len; t++)
+      pos.addSample(timeAt(t), Cesium.Cartesian3.fromDegrees(p.lng[t], p.lat[t], h));
+    pos.setInterpolationOptions({ interpolationDegree: 1, interpolationAlgorithm: Cesium.LinearApproximation });
+    pos.forwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    pos.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
+    return pos;
+  }
+  peds.forEach((p, i) => {
+    const len = Math.min(p.lng.length, NF);
+    const look = pedLook(i);
+    // body: a slightly tapered cylinder ~1.1 m tall (centre ~0.6 m up)
+    viewer.entities.add({
+      position: partPos(p, len, 0.6),
+      cylinder: {
+        length: 1.1, topRadius: 0.17, bottomRadius: 0.24,
+        material: look.shirt,
+        heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+      },
+    });
+    // head: a small sphere (~1.38 m up)
+    viewer.entities.add({
+      position: partPos(p, len, 1.38),
+      ellipsoid: {
+        radii: new Cesium.Cartesian3(0.16, 0.16, 0.19),
+        material: look.skin,
+        heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+      },
+    });
+  });
+}
+
+// Live tracker: recompute fleet metrics for the CURRENT frame on each clock tick.
+//   Trips  = cumulative cars that have reached their destination (meta.trips_series,
+//            else summed from per-car arr flags).
+//   Cars   = fleet size.  Moving = cars with speed > 0.5 m/s.
+//   Crashes= cars whose crash flag is set this frame.  Avg speed of the movers.
+function setupHUD(viewer, DATA, start, dt, nf) {
+  const cars = DATA.worlds.trained.cars;
+  const meta = DATA.meta || {};
+  const vmax = meta.vmax || 9;
+  const n = cars.length;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set("m-cars", n);
+
+  // ---- precompute per-frame series: moving / slowed / crashed / mean speed ----
+  const mov = new Array(nf), jam = new Array(nf), cr = new Array(nf), ms = new Array(nf);
+  for (let f = 0; f < nf; f++) {
+    let m = 0, j = 0, c = 0, sp = 0, k = 0;
+    for (const car of cars) {
+      if (car.crash && car.crash[f]) { c++; continue; }
+      const s = car.spd ? Math.max(0, car.spd[f]) : 0;
+      if (s > 0.5) m++; else j++;
+      sp += s; k++;
+    }
+    mov[f] = m; jam[f] = j; cr[f] = c; ms[f] = k ? sp / k : 0;
+  }
+  // trips: prefer the exported series, else accumulate from per-car arrival flags
+  const trips = meta.trips_series || (() => {
+    const a = new Array(nf);
+    for (let f = 0; f < nf; f++) { let d = 0; for (const c of cars) if (c.arr && c.arr[f]) d++; a[f] = d; }
+    return a;
+  })();
+
+  // ---- chart canvases (sized to their CSS box, DPR-aware) ----
+  const ids = ["dc-trips", "dc-fleet", "dc-hist"];
+  const ctx = {};
+  function sizeCanvases() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ids.forEach((id) => {
+      const c = document.getElementById(id); if (!c) return;
+      c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+      const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); ctx[id] = x;
+    });
+  }
+  sizeCanvases();
+  window.addEventListener("resize", sizeCanvases);
+
+  function drawLine(id, data, col, fill, f) {
+    const x = ctx[id]; if (!x) return; const w = x.canvas.clientWidth, h = x.canvas.clientHeight;
+    x.clearRect(0, 0, w, h);
+    let mx = 1; for (const v of data) mx = Math.max(mx, v);
+    x.strokeStyle = "rgba(255,255,255,.06)"; x.lineWidth = 1;
+    for (let g = 0; g <= 2; g++) { const yy = 3 + g / 2 * (h - 9); x.beginPath(); x.moveTo(0, yy); x.lineTo(w, yy); x.stroke(); }
+    const pt = (i) => [i / (nf - 1) * w, h - 3 - data[i] / mx * (h - 9)];
+    if (fill) { x.beginPath(); for (let i = 0; i < nf; i++) { const [xx, yy] = pt(i); i ? x.lineTo(xx, yy) : x.moveTo(xx, yy); } x.lineTo(w, h); x.lineTo(0, h); x.closePath(); x.fillStyle = fill; x.fill(); }
+    x.beginPath(); for (let i = 0; i < nf; i++) { const [xx, yy] = pt(i); i ? x.lineTo(xx, yy) : x.moveTo(xx, yy); } x.strokeStyle = col; x.lineWidth = 2; x.stroke();
+    const px = f / (nf - 1) * w; x.strokeStyle = "rgba(52,211,153,.5)"; x.lineWidth = 1; x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h); x.stroke();
+  }
+  function drawStack(id, f) {
+    const x = ctx[id]; if (!x) return; const w = x.canvas.clientWidth, h = x.canvas.clientHeight;
+    x.clearRect(0, 0, w, h);
+    const mx = Math.max(1, n);
+    const layer = (arr, base, col) => {
+      x.beginPath();
+      for (let i = 0; i < nf; i++) { const xx = i / (nf - 1) * w, yy = h - (base[i] + arr[i]) / mx * h; i ? x.lineTo(xx, yy) : x.moveTo(xx, yy); }
+      for (let i = nf - 1; i >= 0; i--) { const xx = i / (nf - 1) * w, yy = h - base[i] / mx * h; x.lineTo(xx, yy); }
+      x.closePath(); x.fillStyle = col; x.fill();
+    };
+    const b1 = mov.slice(), b2 = mov.map((m, i) => m + jam[i]);
+    layer(mov, new Array(nf).fill(0), "rgba(52,211,153,.55)");
+    layer(jam, b1, "rgba(245,158,11,.6)");
+    layer(cr, b2, "rgba(239,68,68,.8)");
+    const px = f / (nf - 1) * w; x.strokeStyle = "rgba(52,211,153,.5)"; x.lineWidth = 1; x.beginPath(); x.moveTo(px, 0); x.lineTo(px, h); x.stroke();
+  }
+  function drawHist(id, f) {
+    const x = ctx[id]; if (!x) return; const w = x.canvas.clientWidth, h = x.canvas.clientHeight, B = 8, bins = new Array(B).fill(0);
+    let cnt = 0;
+    for (const car of cars) { if (car.crash && car.crash[f]) continue; const s = car.spd ? Math.max(0, car.spd[f]) : 0; bins[Math.min(B - 1, Math.floor(s / vmax * B))]++; cnt++; }
+    const mx = Math.max(1, ...bins), bw = w / B;
+    x.clearRect(0, 0, w, h);
+    for (let i = 0; i < B; i++) { const bh = bins[i] / mx * (h - 3), xx = i * bw + 2; x.fillStyle = `hsl(${(i + 0.5) / B * 140},80%,52%)`; x.fillRect(xx, h - bh, bw - 4, bh); }
+    set("dc-hn", cnt + " cars");
+  }
+
+  const update = () => {
+    const f = Math.max(0, Math.min(nf - 1, Math.round(
+      Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start) / dt)));
+    set("m-trips", trips[f]);
+    set("m-moving", mov[f]);
+    set("m-crashes", cr[f]);
+    set("m-speed", (ms[f] * 2.23694).toFixed(0) + " mph");
+    set("m-time", (f * dt).toFixed(0) + "s");
+    const bar = (id, lab, v) => { const el = document.getElementById(id); if (el) el.style.width = (v / n * 100) + "%"; set(lab, v); };
+    bar("fb-mov", "fbn-mov", mov[f]); bar("fb-jam", "fbn-jam", jam[f]); bar("fb-crash", "fbn-crash", cr[f]);
+    drawLine("dc-trips", trips, "#34d399", "rgba(52,211,153,.12)", f);
+    drawStack("dc-fleet", f);
+    drawHist("dc-hist", f);
   };
-  const b1 = s.mov.slice(), b2 = s.mov.map((m, i) => m + s.jam[i]);
-  layer(s.mov, new Array(N).fill(0), "rgba(52,211,153,.55)");
-  layer(s.jam, b1, "rgba(245,158,11,.6)");
-  layer(s.cr, b2, "rgba(239,68,68,.8)");
-  const px = f / (N - 1) * w; ctx.strokeStyle = "rgba(52,211,153,.5)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+  viewer.clock.onTick.addEventListener(update);
+  update();
 }
 
-function _histChart(ctx, f) {
-  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, B = 8, bins = new Array(B).fill(0);
-  let nn = 0;
-  for (const car of _dash.world.cars) {
-    const tt = Math.min(f, car.spd.length - 1);
-    if (car.crash[tt]) continue;
-    const fr = Math.min(0.999, Math.max(0, car.spd[tt]) / _dash.vmax); bins[Math.floor(fr * B)]++; nn++;
-  }
-  const mx = Math.max(1, ...bins), bw = w / B;
-  ctx.clearRect(0, 0, w, h);
-  for (let i = 0; i < B; i++) {
-    const bh = bins[i] / mx * (h - 14), x = i * bw + 3;
-    ctx.fillStyle = _spdHsl((i + 0.5) / B); ctx.fillRect(x, h - 11 - bh, bw - 6, bh);
-    ctx.fillStyle = "rgba(139,155,176,.6)"; ctx.font = "8px ui-monospace, Menlo, monospace";
-    ctx.fillText(String(Math.round(i / B * _dash.vmax)), x, h - 2);
-  }
-  document.getElementById("dc-hist-n").textContent = nn + " cars";
-}
-
-function updateDashboard(f) {
-  if (!_dash) return;
-  const s = _dash.s, n = _dash.n;
-  const m = s.mov[f], j = s.jam[f], c = s.cr[f], ms = s.ms[f];
-  document.getElementById("d-trips").textContent = s.trips[f];
-  document.getElementById("d-cpc").textContent = (s.cumCrashed[f] / n).toFixed(2);
-  document.getElementById("d-mov").textContent = Math.round(m / n * 100) + "%";
-  document.getElementById("d-spd").textContent = ms.toFixed(1) + " m/s";
-  const setBar = (bar, lab, v) => { document.getElementById(bar).style.width = (v / n * 100) + "%"; document.getElementById(lab).textContent = v; };
-  setBar("df-mov", "dfb-mov", m); setBar("df-jam", "dfb-jam", j); setBar("df-crash", "dfb-crash", c);
-  const trips = [{ data: s.trips, col: "#34d399", fill: "rgba(52,211,153,.10)" }];
-  if (_dash.ub) trips.push({ data: _dash.ub, col: "#f59e0b" });
-  _lineChart(_dash.ctx[0], trips, f);
-  _stackChart(_dash.ctx[1], f);
-  _histChart(_dash.ctx[2], f);
-}
-
-main().catch((e) => { console.error(e); alert("Viewer error: " + e.message); });
+boot();

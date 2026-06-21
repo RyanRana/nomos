@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nomos — RL for a trafficless city</title>
+<style>
+  :root{
+    --bg:#0a0a0c; --bg2:#0e1014; --ink:#f3f5f8; --mut:#9aa3b2; --mut2:#6b7280;
+    --line:rgba(255,255,255,.08); --grn:#34d399; --grn2:#10b981; --amber:#f59e0b;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.5}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* nav */
+  nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(12px);
+    background:rgba(10,10,12,.6);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{font-weight:800;font-size:18px;letter-spacing:-.4px}
+  .brand b{color:var(--grn)}
+  .nav-links{display:flex;gap:26px;align-items:center;font-size:14px;color:var(--mut)}
+  .nav-links a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:var(--grn);color:#04130d;font-weight:700;
+    font-size:14px;padding:10px 18px;border-radius:11px;transition:.2s;border:1px solid transparent}
+  .btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn.ghost:hover{background:rgba(255,255,255,.05)}
+  .nav-links .btn{color:#04130d}
+
+  /* hero */
+  .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center}
+  .paths{position:absolute;inset:0;pointer-events:none}
+  .paths svg{width:100%;height:100%}
+  .paths path{fill:none;stroke:var(--grn)}
+  .hero-inner{position:relative;z-index:2;max-width:880px;padding:90px 24px 40px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:.3px;
+    color:var(--grn);background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.28);
+    padding:6px 13px;border-radius:99px;margin-bottom:26px;opacity:0;animation:fade .8s .1s forwards}
+  h1.title{font-size:clamp(44px,8vw,92px);font-weight:800;letter-spacing:-.04em;line-height:.98}
+  h1.title .ltr{display:inline-block;opacity:0;transform:translateY(60px);
+    background:linear-gradient(180deg,#fff,rgba(255,255,255,.72));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(17px,2.4vw,22px);color:var(--mut);max-width:620px;margin:24px auto 0;opacity:0;animation:fade 1s 1s forwards}
+  .lede b{color:var(--ink);font-weight:600}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:34px;opacity:0;animation:fade 1s 1.25s forwards}
+  .scrollcue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);color:var(--mut2);font-size:12px;z-index:2;
+    opacity:0;animation:fade 1s 1.8s forwards}
+  @keyframes fade{to{opacity:1}}
+
+  /* sections */
+  section{padding:96px 0;border-top:1px solid var(--line)}
+  .kicker{font-size:12.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--grn);margin-bottom:14px}
+  h2{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-.03em;line-height:1.08;max-width:760px}
+  h2 .dim{color:var(--mut)}
+  .lead{font-size:18px;color:var(--mut);max-width:640px;margin-top:18px}
+  .lead b{color:var(--ink);font-weight:600}
+
+  .grid{display:grid;gap:18px;margin-top:48px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:1.1fr .9fr}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:840px){.g3,.g2,.g4{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--bg2),rgba(14,16,20,.4));border:1px solid var(--line);
+    border-radius:16px;padding:24px;transition:.2s}
+  .card:hover{border-color:rgba(52,211,153,.35);transform:translateY(-2px)}
+  .card .n{font-family:var(--mono);font-size:13px;color:var(--grn);margin-bottom:12px}
+  .card h3{font-size:18px;font-weight:700;margin-bottom:8px}
+  .card p{font-size:14.5px;color:var(--mut);line-height:1.55}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:46px}
+  @media(max-width:840px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{text-align:left}
+  .stat .v{font-family:var(--mono);font-size:clamp(30px,5vw,46px);font-weight:700;letter-spacing:-.02em;
+    background:linear-gradient(180deg,var(--grn),var(--grn2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat .l{font-size:13.5px;color:var(--mut);margin-top:6px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+  @media(max-width:840px){.split{grid-template-columns:1fr}}
+  .badlist,.goodlist{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:24px}
+  .badlist li,.goodlist li{display:flex;gap:11px;font-size:15px;color:var(--mut);align-items:flex-start}
+  .badlist li::before{content:"✕";color:#ef4444;font-weight:700}
+  .goodlist li::before{content:"✓";color:var(--grn);font-weight:700}
+  .goodlist li b,.badlist li b{color:var(--ink);font-weight:600}
+
+  /* final cta */
+  .final{text-align:center;padding:110px 0}
+  .final h2{margin:0 auto}
+  .final p{color:var(--mut);margin:18px auto 0;max-width:520px;font-size:17px}
+  footer{border-top:1px solid var(--line);padding:30px 0;color:var(--mut2);font-size:13px}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <div class="brand" title="νόμος — order that arises without imposed law">Nomos<b>.</b></div>
+  <div class="nav-links">
+    <a href="#problem">Problem</a>
+    <a href="#solution">Solution</a>
+    <a href="#how">How it works</a>
+    <a href="#results">Results</a>
+    <a class="btn" href="cesium/index.html">Run the sim →</a>
+  </div>
+</div></nav>
+
+<header class="hero">
+  <div class="paths" id="paths"></div>
+  <div class="hero-inner">
+    <div class="eyebrow">● Multi-agent reinforcement learning · San Francisco</div>
+    <h1 class="title" id="title">Nomos</h1>
+    <p class="lede">A city of self-driving cars that coordinates with <b>zero traffic lights</b> — trained and verified to drive a real San Francisco at <b>near-zero crashes</b>.</p>
+    <div class="cta-row">
+      <a class="btn" href="cesium/index.html">▶ Run the 3D simulation</a>
+      <a class="btn ghost" href="#problem">See how it works</a>
+    </div>
+  </div>
+  <div class="scrollcue">scroll ↓</div>
+</header>
+
+<section id="problem"><div class="wrap">
+  <div class="kicker">The problem</div>
+  <h2>Traffic isn't a car problem. <span class="dim">It's a coordination problem.</span></h2>
+  <p class="lead">By 2040 the cars drive themselves — so the bottleneck stops being the vehicle and becomes how thousands of them <b>negotiate shared space</b>. Yet there's no good environment to train or verify multi-agent driving at city scale without traffic lights.</p>
+  <ul class="badlist">
+    <li><b>Reward isn't stationary.</b> Every car you add changes the world for every other car — classic single-agent RL breaks.</li>
+    <li><b>No shared benchmark.</b> You can't improve what you can't verify, and "did the city run safely?" had no environment to measure it.</li>
+    <li><b>Signals are a crutch.</b> Lights exist because humans can't coordinate in real time. Autonomous fleets shouldn't need them.</li>
+  </ul>
+</div></section>
+
+<section id="solution"><div class="wrap">
+  <div class="kicker">The solution</div>
+  <div class="split">
+    <div>
+      <h2>One policy. Every car. <span class="dim">No lights.</span></h2>
+      <p class="lead">A single <b>shared, decentralized</b> RL policy drives every car from its own local view — same brain, separate eyes. It learns to anticipate its neighbors and negotiate intersections by yielding, so the whole city flows without a central controller and without signals.</p>
+    </div>
+    <ul class="goodlist">
+      <li><b>Multi-reward.</b> No crashing ≫ keep moving > route efficiently.</li>
+      <li><b>Crashes as a constraint,</b> not a penalty — PPO-Lagrangian drives them toward zero instead of trading safety for speed.</li>
+      <li><b>Deterministic verifier</b> grades every run from the trajectory: crashes, off-road, wrong-way, arrivals. Reward and validity come from the same source of truth.</li>
+      <li><b>Generalizes</b> to neighborhoods it never trained on.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <div class="kicker">How it works</div>
+  <h2>Real map → real RL → verified runs.</h2>
+  <div class="grid g3">
+    <div class="card"><div class="n">01</div><h3>Real San Francisco</h3><p>The drivable street network — roads, junctions, speed limits — is pulled straight from OpenStreetMap and rendered in 3D with terrain and buildings.</p></div>
+    <div class="card"><div class="n">02</div><h3>Multi-agent RL</h3><p>Hundreds of agents train in a fast vectorized env on GPU, sharing one decentralized policy with a centralized critic (CTDE) so they learn to coordinate.</p></div>
+    <div class="card"><div class="n">03</div><h3>Verify every run</h3><p>A pure, deterministic verifier replays the logged trajectory and scores it — turning "did the city run safely?" into a reusable, gradeable RL environment.</p></div>
+  </div>
+</div></section>
+
+<section id="results"><div class="wrap">
+  <div class="kicker">Results</div>
+  <h2>Trained, then proven on a map it had never seen.</h2>
+  <div class="stats">
+    <div class="stat"><div class="v">~1%</div><div class="l">crash rate on a held-out SF neighborhood (vs 12% baseline — ~12× safer)</div></div>
+    <div class="stat"><div class="v">0.07%</div><div class="l">in-distribution crash rate at the safe density frontier</div></div>
+    <div class="stat"><div class="v">0</div><div class="l">traffic lights or stop signs used, anywhere</div></div>
+    <div class="stat"><div class="v">3D</div><div class="l">live Cesium viewer — cars, buildings, pedestrians + a telemetry dashboard</div></div>
+  </div>
+  <p class="lead" style="margin-top:40px">Generalization is the headline: a policy trained on three neighborhoods drove a <b>held-out</b> one at ~1% crashes — proof it learned to coordinate, not to memorize a map.</p>
+</div></section>
+
+<section class="final"><div class="wrap">
+  <h2>See the city run itself.</h2>
+  <p>Watch the trained fleet drive a real 3D San Francisco — no signals, live metrics, near-zero crashes.</p>
+  <div class="cta-row" style="margin-top:30px;animation:none;opacity:1">
+    <a class="btn" href="cesium/index.html">▶ Launch the 3D simulation</a>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <div>Nomos — multi-agent, multi-reward RL for a trafficless 2040 San Francisco.<br><span style="color:var(--mut2)">νόμος — order that arises without imposed law. Cars self-organizing, no signals.</span></div>
+  <div>Built on OpenStreetMap · Cesium · Modal</div>
+</div></footer>
+
+<script>
+// ---- animated FloatingPaths background (vanilla port) ----
+function buildPaths(position) {
+  let p = "";
+  for (let i = 0; i < 36; i++) {
+    const d = `M-${380 - i * 5 * position} -${189 + i * 6}C-${380 - i * 5 * position} -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${152 - i * 5 * position} ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${684 - i * 5 * position} ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`;
+    const w = (0.5 + i * 0.03).toFixed(2);
+    const op = (0.10 + i * 0.022).toFixed(3);
+    const dur = (20 + (i % 10) * 1.4).toFixed(1);
+    const dash = 1400;
+    p += `<path d="${d}" stroke-width="${w}" stroke-opacity="${op}"
+      style="stroke-dasharray:${dash};stroke-dashoffset:${dash};animation:flow ${dur}s linear infinite;animation-delay:-${(i*0.5).toFixed(1)}s"/>`;
+  }
+  return `<svg viewBox="0 0 696 316" preserveAspectRatio="xMidYMid slice" fill="none">${p}</svg>`;
+}
+document.getElementById("paths").innerHTML = buildPaths(1) + buildPaths(-1);
+
+// flow keyframes (injected so we can use stroke-dashoffset animation)
+const st = document.createElement("style");
+st.textContent = "@keyframes flow{0%{stroke-dashoffset:1400;opacity:.3}50%{opacity:.7}100%{stroke-dashoffset:0;opacity:.3}}";
+document.head.appendChild(st);
+
+// ---- staggered title letters ----
+const el = document.getElementById("title"), text = el.textContent;
+el.textContent = "";
+[...text].forEach((ch, i) => {
+  const s = document.createElement("span");
+  s.className = "ltr"; s.textContent = ch;
+  s.style.animation = "fadeUp .7s forwards";
+  s.style.animationDelay = (0.2 + i * 0.05) + "s";
+  el.appendChild(s);
+});
+const st2 = document.createElement("style");
+st2.textContent = "@keyframes fadeUp{to{opacity:1;transform:translateY(0)}}";
+document.head.appendChild(st2);
+</script>
+</body>
+</html>

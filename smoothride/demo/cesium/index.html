@@ -1,82 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SmoothRide — SF 3D</title>
-<script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
-<link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-<link href="style.css" rel="stylesheet" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nomos — 3D San Francisco</title>
+
+  <!-- Official Cesium CDN; CESIUM_BASE_URL must be set before Cesium.js loads. -->
+  <script>window.CESIUM_BASE_URL = "https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/";</script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <link href="style.css" rel="stylesheet" />
+
+  <style>
+    html, body, #cesiumContainer { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: #0b0e13; color: #e7ecf3; font-family: -apple-system, system-ui, sans-serif; text-align: center; }
+    #msg[data-show] { display: flex; }
+    #msg code { background: #1b2230; padding: 2px 6px; border-radius: 5px; }
+  </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
 
-  <div id="hud">
-    <h1>SmoothRide · SF 2040</h1>
-    <div class="row" id="scene-row" style="display:none">
-      <span class="k">iter</span>
-      <select id="scene-select"></select>
-    </div>
-    <div class="row"><span class="k">world</span><span id="world">trained</span></div>
-    <div class="row"><span class="k">cars</span><span id="cars">–</span></div>
-    <div class="row"><span class="k">trips</span><span id="trips" class="ok">0</span></div>
-    <div class="row"><span class="k">crashed</span><span id="crashed" class="bad">0</span></div>
-  </div>
-
-  <!-- ===================== telemetry dashboard ===================== -->
+  <!-- telemetry dashboard (populated by app.js on every clock tick) -->
   <div id="dash">
-    <div class="d-hd">
-      <span class="d-title">Telemetry</span>
-      <span class="d-live"><i></i>live</span>
+    <div class="d-h"><span class="d-t">Nomos · telemetry</span><span class="d-live"><i></i>LIVE</span></div>
+
+    <div class="d-k">
+      <div class="kpi"><span class="l">Trips done</span><b id="m-trips" class="ok">0</b></div>
+      <div class="kpi"><span class="l">Moving</span><b id="m-moving">0</b></div>
+      <div class="kpi"><span class="l">Crashes</span><b id="m-crashes" class="bad">0</b></div>
+      <div class="kpi"><span class="l">Avg speed</span><b id="m-speed">0 mph</b></div>
     </div>
 
-    <div class="d-kpis">
-      <div class="d-kpi"><div class="k">Trips done</div><div class="v ok" id="d-trips">0</div></div>
-      <div class="d-kpi"><div class="k">Crashes/car</div><div class="v" id="d-cpc">0.00</div></div>
-      <div class="d-kpi"><div class="k">Moving</div><div class="v" id="d-mov">0%</div></div>
-      <div class="d-kpi"><div class="k">Mean speed</div><div class="v" id="d-spd">0 m/s</div></div>
+    <div class="card">
+      <div class="ct">Cumulative trips</div>
+      <canvas id="dc-trips" height="60"></canvas>
     </div>
-
-    <div class="d-card">
-      <div class="d-ct">Throughput · cumulative trips
-        <span class="d-lg"><span><i style="background:#34d399"></i>trained</span><span><i style="background:#f59e0b"></i>baseline</span></span>
+    <div class="card">
+      <div class="ct">Fleet status over time
+        <span class="lg"><i style="background:#34d399"></i>moving <i style="background:#f59e0b"></i>slowed <i style="background:#ef4444"></i>crashed</span>
       </div>
-      <canvas id="dc-trips" class="d-chart" height="68"></canvas>
+      <canvas id="dc-fleet" height="54"></canvas>
     </div>
-
-    <div class="d-card">
-      <div class="d-ct">Fleet status over time
-        <span class="d-lg"><span><i style="background:#34d399"></i>moving</span><span><i style="background:#f59e0b"></i>slowed</span><span><i style="background:#ef4444"></i>crashed</span></span>
-      </div>
-      <canvas id="dc-fleet" class="d-chart" height="62"></canvas>
+    <div class="card">
+      <div class="ct">Speed distribution · now <span class="lg" id="dc-hn"></span></div>
+      <canvas id="dc-hist" height="52"></canvas>
     </div>
-
-    <div class="d-card">
-      <div class="d-ct">Speed distribution · now <span class="d-lg" id="dc-hist-n"></span></div>
-      <canvas id="dc-hist" class="d-chart" height="58"></canvas>
+    <div class="card">
+      <div class="fb"><span>moving</span><div class="bar"><i id="fb-mov" style="background:#34d399"></i></div><b id="fbn-mov">0</b></div>
+      <div class="fb"><span>slowed</span><div class="bar"><i id="fb-jam" style="background:#f59e0b"></i></div><b id="fbn-jam">0</b></div>
+      <div class="fb"><span>crashed</span><div class="bar"><i id="fb-crash" style="background:#ef4444"></i></div><b id="fbn-crash">0</b></div>
     </div>
-
-    <div class="d-card">
-      <div class="d-ct">Live fleet</div>
-      <div class="d-fleet">
-        <div class="d-fr"><span>moving</span><div class="d-bar"><i id="df-mov" style="background:#34d399"></i></div><b id="dfb-mov">0</b></div>
-        <div class="d-fr"><span>slowed</span><div class="d-bar"><i id="df-jam" style="background:#f59e0b"></i></div><b id="dfb-jam">0</b></div>
-        <div class="d-fr"><span>crashed</span><div class="d-bar"><i id="df-crash" style="background:#ef4444"></i></div><b id="dfb-crash">0</b></div>
-      </div>
-    </div>
-
-    <div class="d-card">
-      <div class="d-ct">Run totals</div>
-      <div class="d-agg">
-        <div class="r"><span>Cars ever crashed</span><b id="da-crash">0 / 0</b></div>
-        <div class="r"><span>Avg fleet moving</span><b id="da-mov">0%</b></div>
-        <div class="r"><span>Avg speed sustained</span><b id="da-spd">0 m/s</b></div>
-        <div class="r"><span>Traffic signals</span><b class="ok">0</b></div>
-      </div>
-    </div>
+    <div class="d-foot"><b id="m-cars">0</b> cars · <b id="m-time">0s</b> · traffic signals: <b class="ok">0</b></div>
   </div>
 
-  <script src="config.js" onerror="window.SMOOTHRIDE_CONFIG={cesiumIonToken:''}"></script>
+  <div id="msg"></div>
+  <script src="config.js" onerror="window.__noConfig=true"></script>
+  <script src="cesium-murals.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
