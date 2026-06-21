@@ -683,6 +683,33 @@ git commit -m "feat: rules-native verify() — lane/wrong-way/speed/collision ve
 
 ---
 
+### Task 4: Verifier drives training (per-rollout relabeling + §9 reward strip)
+
+Make the verifier produce the PPO cost (reward-model pattern), and strip the env reward to
+efficiency-only so all constraint signal flows through the verifier.
+
+**Files:**
+- Modify: `smoothride/rl/verifier.py` (add `_lane_flags`, `step_cost`, `cost_signal`; refactor
+  `verify()` to share `_lane_flags`)
+- Modify: `smoothride/rl/ppo.py` (`collect` emits raw State fields; add `verifier_cost(env, batch)`)
+- Modify: `smoothride/env/kinematic.py` (add `w_time`; reward = `w_progress·progress +
+  w_goal·new_goal − w_time`; drop the prox/ped_prox/yield/idle/collision reward terms)
+- Modify: `tests/rl/test_verifier.py` (cost_signal tests)
+- Create: `scripts/smoke_train_verifier.py`
+
+**Interfaces:**
+- `step_cost(pos, seg_start, seg_end, lane_count, lane_width, heading, speed, spawn_grace, crashed, speed_limit=None) -> (… ,N) float32` — per-step cost = crash + off_lane + wrong_way (+ over_speed); works on `(T,N)` or `(B*T,N)`.
+- `cost_signal(trace: Trace) -> (T,N)` — `step_cost` over a Trace.
+- `verifier_cost(env, batch) -> (B,T,N)` — host adapter; gathers geometry for each `(route_idx, wp_ptr)`, calls `step_cost`.
+
+- [ ] **Step 1: Add `_lane_flags`/`step_cost`/`cost_signal`; refactor `verify()` to use `_lane_flags`.** Run `pytest tests/rl/ -q` (30 pass — refactor is behavior-preserving; 2 new cost_signal tests).
+- [ ] **Step 2: `collect` out-dict gains `pos/heading/speed/route_idx/wp_ptr/spawn_grace/crashed`; add `verifier_cost`.** (`update()` reads only its own keys, so extra keys are inert.)
+- [ ] **Step 3: §9 reward strip in `kinematic.step`** — add `w_time` field; reward = efficiency only; remove the dead penalty computations (`prox_pen`, `ped_prox`, the yield block, `idle_pen`).
+- [ ] **Step 4: `scripts/smoke_train_verifier.py`** — per iter: `collect → verifier_cost → update`, dual-ascend `lam`. Run it: verifier cost ≫ crash-only, `lam` rises, loss finite.
+- [ ] **Step 5: Commit.**
+
+---
+
 ## Self-Review
 
 **Spec coverage:**

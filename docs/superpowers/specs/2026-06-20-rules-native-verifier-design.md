@@ -58,10 +58,33 @@ Lane-keeping is a **constraint**, not an efficiency objective. Per the CMDP refr
 go through the **cost channel** (Lagrangian in `rl/ppo.py`), never folded into reward as a fixed
 penalty. The verifier computes the continuous lateral offset anyway (for `off_lane`), so it
 reports `max_lateral_offset` per car as an eval metric, and that same number is the basis for a
-**hinged** cost `max(0, offset − OFFLANE_THRESH)` downstream. **Do not minimize raw offset**: that
+**hinged** cost `max(0, offset − OFFLANE_THRESH)`. **Do not minimize raw offset**: that
 would punish legal lane changes, corner-cutting, and intersection weaving — the very maneuvering
 we are training. The hinge is zero inside the lane corridor and only grows once a car has left it.
-(The reward refactor itself is separate downstream work; the verifier only *exposes* the signal.)
+The shipped per-step cost (`step_cost`) uses the **binary** off-lane indicator (handoff §6); the
+continuous hinge is a drop-in refinement (the verifier already reports `max_lateral_offset`).
+
+## How the verifier drives training (the reward model, not a report card)
+
+The verifier is the **source of the training cost**, not an after-the-fact grader. It is "offline"
+only in that it reads a logged trace instead of re-running physics — it runs **synchronously inside
+every training iteration**, the reward-model pattern:
+
+```
+collect()        roll out on device (Modal GPU)        → trajectory (+ raw State fields)
+verifier_cost()  gather road geometry, run step_cost    → per-step cost (B,T,N)   [host]
+update()         reward_eff = reward − lam·cost          → GAE → PPO grad step
+```
+
+`rl/verifier.step_cost` / `cost_signal` produce the per-step `(T,N)` cost from the same
+`_lane_flags` core `verify()` uses, so the signal the policy optimizes is exactly the rulebook the
+verifier certifies — no divergence. `rl/ppo.verifier_cost` is the host adapter that gathers
+`seg_start/seg_end/lane_count/speed_limit` for each logged `(route_idx, wp_ptr)` and calls
+`step_cost`, returning `(B,T,N)` to drop into `batch["cost"]`. Paired with the §9 reward strip,
+**every** constraint signal now reaches the policy through the verifier; the env reward is
+efficiency-only. (A faster Option 2 — porting the predicates to JAX inside `collect`'s scan with
+the numpy verifier as a cross-check — is deferred until the per-iteration host round-trip is a
+measured bottleneck.)
 
 ## Trace schema v2 — measurements in, verdicts out
 
@@ -168,13 +191,24 @@ Constants live in the verifier (it owns the rule): `OFFLANE_THRESH ≈ 5.0` m (~
 - **determinism:** `verify(tr) == verify(tr)`.
 - **purity:** module imports only numpy + stdlib; no `smoothride.env` import.
 
+## Done in this work
+
+- Trace schema v2 + `verify()` (per-car/run verdicts).
+- `step_cost`/`cost_signal` (per-step training cost) + `ppo.verifier_cost` host adapter.
+- §9 reward strip in `kinematic.step` (efficiency-only reward; `w_time` added).
+- `collect` emits raw State fields for relabeling.
+- Smokes: `scripts/smoke_verifier.py` (env→trace→verify), `scripts/smoke_train_verifier.py`
+  (verifier-driven PPO end to end).
+
 ## Out of scope (named, not silently dropped)
 
-- The sim-side rollout→Trace wrapper that fills the v2 fields (separate integration task; depends
-  on env exposing `routes_xy`/`routes_lanes`/`lane_width`, which it already has).
-- The CMDP reward refactor and wiring the hinged offset cost into `rl/ppo.py` (downstream; the
-  verifier only exposes the signal).
+- **Option 2** — porting the predicates to JAX inside `collect`'s scan (verifier becomes a
+  cross-check). Deferred until the per-iteration host round-trip is a measured bottleneck.
+- Continuous **hinge** cost for off-lane (shipped cost is the binary §6 indicator).
+- A **cross-test** asserting `verifier_cost` (host) == an in-sim JAX cost (only needed once
+  Option 2 exists).
+- A production rollout→Trace wrapper (the smokes' inline adapters cover this for now).
 - Pedestrian-specific logic and zebra-crossing rules (future; ped collisions are already covered
-  by the logged `crashed` event today).
+  by the logged `crashed` event).
 - A pos-based collision cross-check that replays freeze/mask state.
 - Yield / traffic-light / sign rules (excluded by the no-signals premise).
