@@ -37,6 +37,7 @@ def test_ped_waits_before_start_then_moves():
     st, _ = K.reset(env, jax.random.PRNGKey(0))
     # a ped with start > 0 sits at path[0] until its start step
     late = int(np.argmax(np.asarray(env.ped_starts) > 0))
+    assert env.ped_starts[late] > 0, "fixture must have at least one delayed-start ped"
     p0 = np.asarray(env.ped_paths[late, 0])
     np.testing.assert_allclose(np.asarray(st.ped_pos[late]), p0, atol=1e-4)
     # step until just past its start, then it should have moved

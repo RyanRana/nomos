@@ -24,6 +24,7 @@ import jax
 import jax.numpy as jnp
 
 from . import spatial
+from .ped_paths import arc_interp
 from .routing import RoutePool
 
 
@@ -229,7 +230,6 @@ def _observe(env: Env, st: State, cand) -> jnp.ndarray:
 def _ped_step(env: Env, st: State):
     """Deterministic ped motion: position is a pure function of time along the
     prebuilt polyline. No RNG. Returns (pos, vel, dir, crossing)."""
-    from .ped_paths import arc_interp
     walked = (jnp.maximum(0, st.t - env.ped_starts).astype(jnp.float32)
               * env.ped_speed * env.dt)
     ped_pos = arc_interp(env.ped_paths, env.ped_cum, walked)
