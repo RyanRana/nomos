@@ -9,8 +9,12 @@ a whole fleet shares the real San Francisco road graph without a central control
 without crashing. Low-level autonomy (perception, throttle/brake/steer) is assumed
 solved; the one irreducible human element is **pedestrians**, whom cars must yield to.
 
-**▶ Live 3D demo:** the [Cesium viewer](smoothride/demo/cesium/) replays a trained fleet
-on real SF streets with a live telemetry dashboard.
+![Nomos — orbiting the trained fleet over downtown San Francisco](docs/media/nomos-aerial.gif)
+
+![Nomos — street-level dolly through the fleet](docs/media/nomos-street-dolly.gif)
+
+*The trained policy driving the live [Cesium viewer](smoothride/demo/cesium/) on the real
+SF grid — 172 cars, per-car colors, building facades, and a live telemetry dashboard.*
 
 ---
 
