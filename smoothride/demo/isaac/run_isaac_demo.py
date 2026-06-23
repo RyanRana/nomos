@@ -54,8 +54,8 @@ def explain_and_exit(missing, args):
     for m in missing:
         print(f"   • {m}")
     print()
-    print(" This is expected on a Mac / non-GPU box. The web viewer")
-    print(" (smoothride/demo/web) is the always-works demo; this Isaac path is")
+    print(" This is expected on a Mac / non-GPU box. The Cesium viewer")
+    print(" (smoothride/demo/cesium) is the always-works demo; this Isaac path is")
     print(" the cinematic upgrade and needs an RTX/L40S box with Isaac Sim 4.5.0")
     print(" + IsaacLab 2.0.2 + WheeledLab.")
     print()

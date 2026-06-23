@@ -6,11 +6,12 @@
   "outputDirectory": "smoothride/demo",
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/", "destination": "/landing.html" }
+    { "source": "/", "destination": "/cesium/index.html" }
   ],
   "redirects": [
     { "source": "/sim", "destination": "/cesium/index.html" },
-    { "source": "/cesium", "destination": "/cesium/index.html" }
+    { "source": "/cesium", "destination": "/cesium/index.html" },
+    { "source": "/landing", "destination": "/landing.html" }
   ],
   "headers": [
     {

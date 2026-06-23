@@ -13,7 +13,7 @@ Geo-reference comes straight from the scene metadata build_sf_scene wrote
 export_web does, so the cars land on the real streets.
 
     python -m smoothride.worldsim.export_cesium --cars 50 --seconds 30 \
-        --out smoothride/demo/web/public/trajectories.json
+        --out smoothride/demo/trajectories.json
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from .control_bridge import MultiCarController, yaw_from_quat
 from .planner import RoutePlanner
 
 DEFAULT_OUT = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "demo", "web", "public", "trajectories.json"))
+    os.path.dirname(__file__), "..", "demo", "trajectories.json"))
 
 
 def _geo(scene_dir):

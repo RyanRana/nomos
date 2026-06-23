@@ -1,16 +1,15 @@
-"""Export rollouts to a compact JSON the deck.gl web viewer consumes.
+"""Reproject rollouts into a compact lon/lat JSON.
 
-The web demo shows the LEARNING DELTA on the real San Francisco map: an
-UNTRAINED coordination policy (the low-opacity "shadow world" that gridlocks and
-crashes) vs the TRAINED policy flowing smoothly. Both rollouts are replayed here,
-their metric-frame trajectories are reprojected back to lon/lat (WGS84) so Mapbox
-can place them on the real street grid, and everything is rounded + packed into
-per-car arrays to keep the file small.
+Shared geo helpers (`_lonlat_transformer`, `_to_lonlat`, `_roads_geojson`,
+`_pack_world`) used by the Cesium exporter and the smoke scripts: metric-frame
+trajectories are reprojected back to lon/lat (WGS84) so they land on the real San
+Francisco street grid, then rounded + packed into per-car arrays to keep the file
+small.
 
 Usage:
   python -m smoothride.demo.export_web \
       --trained runs/trained.msgpack --untrained runs/untrained.msgpack \
-      --agents 24 --peds 12 --steps 300 --out smoothride/demo/web/public/trajectories.json
+      --agents 24 --peds 12 --steps 300 --out smoothride/demo/trajectories.json
 """
 from __future__ import annotations
 
@@ -27,8 +26,8 @@ from ..env import kinematic as K
 from ..env.routing import build_route_pool
 from .render import load_params, rollout
 
-WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "web"))
-DEFAULT_OUT = os.path.join(WEB_DIR, "public", "trajectories.json")
+DEMO_DIR = os.path.abspath(os.path.dirname(__file__))
+DEFAULT_OUT = os.path.join(DEMO_DIR, "trajectories.json")
 
 
 def _lonlat_transformer(net: RoadNetwork) -> Transformer:
