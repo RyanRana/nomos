@@ -5,10 +5,8 @@
   "installCommand": null,
   "outputDirectory": "smoothride/demo",
   "trailingSlash": false,
-  "rewrites": [
-    { "source": "/", "destination": "/cesium/index.html" }
-  ],
   "redirects": [
+    { "source": "/", "destination": "/cesium/index.html" },
     { "source": "/sim", "destination": "/cesium/index.html" },
     { "source": "/cesium", "destination": "/cesium/index.html" },
     { "source": "/landing", "destination": "/landing.html" }
